@@ -1,13 +1,16 @@
 # common/routes.py
-# 共用功能的網址：首頁、登入、登出、註冊、帳號審核
-from fastapi import APIRouter, Depends, Form, Request
+# 共用功能的網址：首頁、登入、登出、本地/雲端模式切換、註冊、帳號審核
+from urllib.parse import quote
+
+from fastapi import APIRouter, Form, Request
 from fastapi.responses import RedirectResponse
 from psycopg.errors import UniqueViolation
 
 from common.auth import (
-	ROLE_LABELS, hash_password, login_user, logout_user, require_admin, verify_password,
+	ROLE_LABELS, AdminUser, hash_password, login_user, logout_user, verify_password,
 )
-from common.db import getDB
+from common.config import MODE_LABELS
+from common.db import DB, available_modes
 from common.templating import render
 
 router = APIRouter(tags=["共用"])
@@ -38,10 +41,10 @@ async def login_page(request: Request, next: str = "/", msg: str | None = None):
 @router.post("/login")
 async def login(
 	request: Request,
+	db: DB,
 	username: str = Form(...),
 	password: str = Form(...),
 	next: str = Form("/"),
-	db=Depends(getDB),
 ):
 	cur = await db.execute("SELECT * FROM users WHERE username = %s", (username.strip(),))
 	row = await cur.fetchone()
@@ -67,6 +70,25 @@ async def logout(request: Request):
 	return RedirectResponse("/", status_code=303)
 
 
+# ---------- 切換本地／雲端模式 ----------
+@router.post("/db-mode")
+async def switch_db_mode(request: Request, mode: str = Form(...), next: str = Form("/")):
+	"""
+	切換資料庫模式。切換時一定會登出：兩邊是不同的資料庫，
+	本地的 id=4 和雲端的 id=4 可能是不同的人，不登出會用錯身分操作資料。
+	"""
+	if mode in available_modes(request) and mode != request.session.get("db_mode"):
+		logout_user(request)
+		request.session["db_mode"] = mode
+		msg = f"已切換到{MODE_LABELS[mode]}，請重新登入"
+	else:
+		msg = None
+	url = f"/login?next={quote(safe_next(next))}"
+	if msg:
+		url += f"&msg={quote(msg)}"
+	return RedirectResponse(url, status_code=303)
+
+
 # ---------- 註冊 ----------
 @router.get("/register")
 async def register_page(request: Request):
@@ -76,12 +98,12 @@ async def register_page(request: Request):
 @router.post("/register")
 async def register(
 	request: Request,
+	db: DB,
 	username: str = Form(...),
 	full_name: str = Form(...),
 	email: str = Form(""),
 	password: str = Form(...),
 	password2: str = Form(...),
-	db=Depends(getDB),
 ):
 	form = {"username": username.strip(), "full_name": full_name.strip(), "email": email.strip()}
 
@@ -112,7 +134,7 @@ async def register(
 
 # ---------- 帳號審核（管理員） ----------
 @router.get("/admin/users")
-async def user_list(request: Request, user=Depends(require_admin), db=Depends(getDB)):
+async def user_list(request: Request, user: AdminUser, db: DB):
 	# 待審核的排最前面，方便管理員處理
 	cur = await db.execute(
 		"""SELECT id, username, full_name, email, role, status, created_at
@@ -125,9 +147,9 @@ async def user_list(request: Request, user=Depends(require_admin), db=Depends(ge
 @router.post("/admin/users/{user_id}/status")
 async def set_user_status(
 	user_id: int,
+	user: AdminUser,
+	db: DB,
 	status: str = Form(...),
-	user=Depends(require_admin),
-	db=Depends(getDB),
 ):
 	# 只接受這幾種狀態（資料庫也有 CHECK 限制，這裡先擋可以給比較清楚的錯誤）
 	if status not in ("active", "rejected", "disabled") or user_id == user["id"]:
@@ -143,9 +165,9 @@ async def set_user_status(
 @router.post("/admin/users/{user_id}/role")
 async def set_user_role(
 	user_id: int,
+	user: AdminUser,
+	db: DB,
 	role: str = Form(...),
-	user=Depends(require_admin),
-	db=Depends(getDB),
 ):
 	if role in ROLE_LABELS and user_id != user["id"]:  # 不能改自己的角色，避免把自己降級鎖死
 		await db.execute("UPDATE users SET role = %s WHERE id = %s", (role, user_id))

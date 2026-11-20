@@ -80,6 +80,24 @@ th { background: #eef2f6; }
 .alert-error { background: var(--err-bg); color: var(--err-text); }
 .todo { padding: 12px 16px; border: 2px dashed #e0a800; background: #fffbea; border-radius: 6px; }
 
+/* ---------- 本地／雲端模式 ---------- */
+/* 登入頁的切換開關：兩個按鈕併成一條，選中的那個填滿顏色 */
+.mode-switch { display: flex; margin-bottom: 8px; border: 1px solid var(--border); border-radius: 6px; overflow: hidden; }
+.mode-option {
+  flex: 1; padding: 10px; border-radius: 0;
+  background: #fff; color: var(--muted);
+}
+.mode-option:hover { background: #f0f3f6; }
+.mode-option.active.mode-local { background: var(--primary); color: #fff; }
+.mode-option.active.mode-cloud { background: #c2410c; color: #fff; }  /* 雲端用橘紅色，提醒會真的寫入 */
+.mode-option:disabled { color: #bbb; background: #fafafa; cursor: not-allowed; }
+.mode-hint { font-size: 0.9rem; color: var(--muted); }
+
+/* 導覽列上的模式標籤 */
+.navbar .mode-badge { padding: 2px 10px; border-radius: 10px; font-size: 0.85rem; text-decoration: none; }
+.navbar .mode-badge.mode-local { background: rgba(255,255,255,0.2); }
+.navbar .mode-badge.mode-cloud { background: #c2410c; font-weight: bold; }
+
 .badge { padding: 2px 8px; border-radius: 10px; font-size: 0.85rem; background: #eee; }
 .badge-active, .badge-approved, .badge-returned { background: var(--ok-bg); color: var(--ok-text); }
 .badge-pending, .badge-checked_out { background: #fff4d6; color: #8a6100; }

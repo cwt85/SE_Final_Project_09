@@ -3,8 +3,8 @@
 # 網址都以 /schedule 開頭。整個模組都要登入。
 from fastapi import APIRouter, Depends, Request
 
-from common.auth import ROLE_ADMIN, require_admin, require_login
-from common.db import getDB
+from common.auth import ROLE_ADMIN, AdminUser, LoginUser, require_login
+from common.db import DB
 from common.templating import render
 
 # dependencies=[...] 會套用到這個 router 底下的「所有」網址：沒登入一律導向登入頁
@@ -12,7 +12,7 @@ router = APIRouter(prefix="/schedule", tags=["③ 課程排課"], dependencies=[
 
 
 @router.get("")
-async def course_list(request: Request, user=Depends(require_login), db=Depends(getDB)):
+async def course_list(request: Request, user: LoginUser, db: DB):
 	"""課程清單：老師看到自己的課，管理員看到全部。"""
 	is_admin = user["role"] == ROLE_ADMIN
 	cur = await db.execute(
@@ -39,7 +39,7 @@ async def calendar(request: Request):
 
 
 @router.get("/conflicts")
-async def conflicts(request: Request, user=Depends(require_admin)):
+async def conflicts(request: Request, user: AdminUser):
 	"""管理員：時間衝突的課程清單。"""
 	# TODO: 查詢 SQL 見 docs/database.md 第 5.3 節
 	return render(request, "course_schedule/conflicts.html")

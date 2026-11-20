@@ -4,6 +4,26 @@
 <div class="form-box">
   <h1>登入</h1>
 
+  {# ===== 本地／雲端模式切換：按下就送出 /db-mode，切換後會登出並回到這頁 ===== #}
+  <form method="post" action="/db-mode" class="mode-switch">
+    <input type="hidden" name="next" value="{{ next or '/' }}">
+    {% for mode in ['local', 'cloud'] %}
+      <button type="submit" name="mode" value="{{ mode }}"
+              class="mode-option mode-{{ mode }} {% if db_mode == mode %}active{% endif %}"
+              {% if mode not in db_modes %}disabled title="尚未設定 CLOUD_DATABASE_URL"{% endif %}
+              {% if db_mode == mode %}aria-pressed="true"{% endif %}>
+        {{ MODE_LABELS[mode] }}
+      </button>
+    {% endfor %}
+  </form>
+  <p class="mode-hint">
+    {% if db_mode == 'cloud' %}
+      ⚠ <strong>雲端模式</strong>：連到 AWS 共用資料庫，所有操作都會<strong>真的寫入</strong>，全組都看得到。
+    {% else %}
+      本地模式：連到自己電腦的 Docker 資料庫，單純測試用，資料只有你看得到。
+    {% endif %}
+  </p>
+
   {% if msg %}<p class="alert alert-ok">{{ msg }}</p>{% endif %}
   {% if error %}<p class="alert alert-error">{{ error }}</p>{% endif %}
 

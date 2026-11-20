@@ -10,11 +10,13 @@ from fastapi import FastAPI, Request
 from fastapi.responses import RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from starlette.exceptions import HTTPException as StarletteHTTPException
+from psycopg import OperationalError
+from psycopg_pool import PoolTimeout
 from starlette.middleware.sessions import SessionMiddleware
 
 from common.auth import LoginRequired
-from common.config import BASE_DIR, SESSION_SECRET
-from common.db import lifespan
+from common.config import BASE_DIR, MODE_CLOUD, SESSION_SECRET
+from common.db import get_mode, lifespan, reset_pool
 from common.templating import render
 
 # 各模組的 router
@@ -54,6 +56,21 @@ for module in ("common", "space_query", "space_booking", "course_schedule"):
 async def handle_login_required(request: Request, exc: LoginRequired):
 	"""沒登入 → 導向登入頁，並記住原本要去的頁面，登入後跳回來。"""
 	return RedirectResponse(f"/login?next={quote(exc.next_url)}", status_code=303)
+
+
+@app.exception_handler(PoolTimeout)        # 等不到可用連線（例如一開始就沒開 SSH 通道）
+@app.exception_handler(OperationalError)   # 連線途中斷掉（例如使用中 SSH 通道被關掉）
+async def handle_db_unavailable(request: Request, exc: Exception):
+	"""連不上資料庫 → 顯示原因與解法，而不是一直轉圈或噴 500。"""
+	mode = get_mode(request)
+	# 換一個新的連線池，這樣資料庫恢復後重新整理就能馬上連上（原因見 common/db.py 的 reset_pool）
+	await reset_pool(request.app, mode)
+	if mode == MODE_CLOUD:
+		message = ("連不上雲端資料庫。請確認 SSH 通道已開啟：ssh -N -L 5434:127.0.0.1:5432 <AWS 主機>，"
+		           "或到登入頁切換回本地模式。")
+	else:
+		message = "連不上本地資料庫。請確認 Docker 已啟動：docker compose up -d"
+	return render(request, "common/error.html", status_code=503, message=message)
 
 
 @app.exception_handler(StarletteHTTPException)

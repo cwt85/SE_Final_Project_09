@@ -3,8 +3,8 @@
 # 網址都以 /booking 開頭。整個模組都要登入。
 from fastapi import APIRouter, Depends, Request
 
-from common.auth import require_admin, require_login
-from common.db import getDB
+from common.auth import AdminUser, LoginUser, require_login
+from common.db import DB
 from common.templating import render
 
 # dependencies=[...] 會套用到這個 router 底下的「所有」網址：沒登入一律導向登入頁
@@ -12,7 +12,7 @@ router = APIRouter(prefix="/booking", tags=["② 預約借用"], dependencies=[D
 
 
 @router.get("")
-async def my_bookings(request: Request, user=Depends(require_login), db=Depends(getDB)):
+async def my_bookings(request: Request, user: LoginUser, db: DB):
 	"""我的借用紀錄。"""
 	cur = await db.execute(
 		"""SELECT b.id, b.booking_date, b.start_time, b.end_time, b.purpose, b.status,
@@ -40,7 +40,7 @@ async def new_booking(request: Request, room_id: int | None = None):
 
 
 @router.get("/admin")
-async def booking_admin(request: Request, user=Depends(require_admin)):
+async def booking_admin(request: Request, user: AdminUser):
 	"""管理員：審核、登記借出、確認歸還。"""
 	# TODO: 列出待審核／待領用／待歸還的借用單
 	return render(request, "space_booking/admin.html")

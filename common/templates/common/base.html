@@ -21,6 +21,8 @@
       {% endif %}
     </nav>
     <div class="nav-user">
+      {# 一直顯示目前連到哪個資料庫，避免在雲端模式誤寫資料；點了可以到登入頁切換 #}
+      <a href="/login" class="mode-badge mode-{{ db_mode }}" title="點此切換模式">{{ MODE_LABELS[db_mode] }}</a>
       {% if user %}
         <span>{{ user.full_name }}（{{ ROLE_LABELS[user.role] }}）</span>
         <a href="/logout">登出</a>

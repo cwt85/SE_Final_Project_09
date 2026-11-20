@@ -8,9 +8,9 @@
 
 | 檔案 | 用途 |
 |---|---|
-| `config.py` | 讀取 `.env` 的設定（`DATABASE_URL`、`SESSION_SECRET`） |
-| `db.py` | 資料庫連線池；`getDB` 給 `Depends` 使用 |
-| `auth.py` | 密碼雜湊、登入狀態、權限檢查（`require_login`、`require_admin`、`require_teacher`） |
+| `config.py` | 讀取 `.env` 的設定（`DATABASE_URL`、`CLOUD_DATABASE_URL`、`SESSION_SECRET`） |
+| `db.py` | 本地／雲端兩個連線池；各模組用 `db: DB` 取得目前模式的連線 |
+| `auth.py` | 密碼雜湊、登入狀態、權限檢查（`LoginUser`、`TeacherUser`、`AdminUser`） |
 | `templating.py` | 共用的 Jinja2 設定；`render()` 會自動把登入者放進模板 |
 | `occupancy.py` | **整合用**：教室占用與時段衝突查詢，借用和排課模組都要用 |
 | `routes.py` | 共用網址：首頁、登入、登出、註冊、帳號審核 |
@@ -23,7 +23,8 @@
 |---|---|---|
 | `GET /` | 首頁 | 公開 |
 | `GET/POST /login` | 登入（`?next=` 登入後跳回原頁） | 公開 |
-| `GET /logout` | 登出 | 公開 |
+| `GET /logout` | 登出（保留本地／雲端模式設定） | 公開 |
+| `POST /db-mode` | 切換本地／雲端模式（會自動登出） | 公開 |
 | `GET/POST /register` | 註冊（新帳號是「待審核」狀態） | 公開 |
 | `GET /admin/users` | 帳號列表與審核 | 管理員 |
 | `POST /admin/users/{id}/status` | 核准／退回／停用 | 管理員 |
@@ -31,33 +32,44 @@
 
 ## 在你的模組裡怎麼用
 
-### 1. 權限檢查
+### 1. 權限檢查與資料庫連線
 
 ```python
-from fastapi import APIRouter, Depends, Request
-from common.auth import require_login, require_admin, require_teacher
-from common.db import getDB
+from fastapi import APIRouter, Form, Request
+from common.auth import LoginUser, TeacherUser, AdminUser
+from common.db import DB
 from common.templating import render
 
 router = APIRouter(prefix="/xxx")
 
 @router.get("/page")
-async def page(request: Request, user=Depends(require_login), db=Depends(getDB)):
+async def page(request: Request, user: LoginUser, db: DB):
     # 能執行到這裡，代表一定已經登入
     # user = {"id": 4, "username": "student1", "full_name": "陳同學", "role": "user"}
     cur = await db.execute("SELECT * FROM rooms WHERE id = %s", (1,))
     room = await cur.fetchone()
     return render(request, "xxx/page.html", room=room)
+
+@router.post("/save")
+async def save(request: Request, user: AdminUser, db: DB, name: str = Form(...)):
+    # 表單欄位（有預設值的參數）要放在最後面，這是 Python 的規定
+    ...
 ```
 
 | 寫法 | 誰可以進來 | 不符合時 |
 |---|---|---|
-| `Depends(require_login)` | 任何已登入的人 | 導向登入頁，登入後跳回來 |
-| `Depends(require_teacher)` | 老師、管理員 | 403 錯誤頁 |
-| `Depends(require_admin)` | 管理員 | 403 錯誤頁 |
+| `user: LoginUser` | 任何已登入的人 | 導向登入頁，登入後跳回來 |
+| `user: TeacherUser` | 老師、管理員 | 403 錯誤頁 |
+| `user: AdminUser` | 管理員 | 403 錯誤頁 |
 | `current_user(request)` | 不檢查，回傳使用者或 `None` | — |
 
-> **畫面上把按鈕藏起來不等於安全**，有人可以直接輸入網址。每個需要權限的網址都一定要加 `Depends(...)`。
+**參數順序：`request` → `user` → `db` → 表單欄位。** FastAPI 依照參數順序執行檢查，`user` 放在 `db` 前面，沒權限的請求就會先被擋下，不會白白去連資料庫。
+
+> **畫面上把按鈕藏起來不等於安全**，有人可以直接輸入網址。每個需要權限的網址都一定要加 `user: ...`。
+
+> **為什麼是 `db: DB`，而不是 `db=Depends(getDB)`？** FastAPI 預設會在「回應已經送給瀏覽器之後」才 commit。萬一 commit 失敗，使用者已經看到「成功」，資料其實沒存進去。`DB` 已經設定成在送出回應**之前** commit，所以請一律用 `db: DB`。
+
+> **不用管現在是本地還是雲端模式**：`db: DB` 會自動連到使用者在登入頁選的那個資料庫。
 
 ### 2. 模板
 

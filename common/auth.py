@@ -2,14 +2,17 @@
 # 共用的登入／權限工具。三個模組都從這裡 import，不要各自實作登入檢查。
 #
 # 用法（在任何模組的 routes.py）：
-#   from common.auth import require_login, require_admin, require_role
+#   from common.auth import LoginUser, TeacherUser, AdminUser
+#   from common.db import DB
 #
 #   @router.get("/xxx")
-#   async def page(user=Depends(require_login)):     # 要登入
-#   async def page(user=Depends(require_admin)):     # 要是管理員
-#   async def page(user=Depends(require_teacher)):   # 要是老師或管理員
+#   async def page(request: Request, user: LoginUser, db: DB):     # 要登入
+#   async def page(request: Request, user: TeacherUser, db: DB):   # 要是老師或管理員
+#   async def page(request: Request, user: AdminUser, db: DB):     # 要是管理員
 #
 # user 是一個 dict：{"id": 1, "username": "admin", "full_name": "系統管理員", "role": "admin"}
+from typing import Annotated
+
 import bcrypt
 from fastapi import Depends, HTTPException, Request
 
@@ -49,8 +52,8 @@ def login_user(request: Request, user_row: dict) -> None:
 
 
 def logout_user(request: Request) -> None:
-	"""清除 session，等於登出。"""
-	request.session.clear()
+	"""登出：只移除使用者資料，保留其他設定（例如本地／雲端模式）。"""
+	request.session.pop("user", None)
 
 
 def current_user(request: Request) -> dict | None:
@@ -91,3 +94,13 @@ def require_role(*roles: str):
 # 常用的組合，直接拿來用
 require_admin = require_role(ROLE_ADMIN)
 require_teacher = require_role(ROLE_TEACHER, ROLE_ADMIN)  # 管理員也能做老師能做的事
+
+
+# ===== 各模組請用這些型別宣告「需要什麼身分」 =====
+#   async def page(request: Request, user: AdminUser, db: DB):
+#
+# 請把 user 寫在 db 前面：FastAPI 依參數順序執行，
+# 這樣沒權限的請求會先被擋下，不會白白去連資料庫
+LoginUser = Annotated[dict, Depends(require_login)]      # 任何已登入的人
+TeacherUser = Annotated[dict, Depends(require_teacher)]  # 老師或管理員
+AdminUser = Annotated[dict, Depends(require_admin)]      # 管理員

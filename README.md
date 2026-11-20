@@ -37,7 +37,7 @@ project_code/
 ### 分工規則
 
 1. **只改自己的模組資料夾**。要改 `common/`、`main.py`、`sql/01_schema.sql` 時，先在群組說一聲。
-2. 登入檢查一律用 `common/auth.py` 提供的 `require_login`、`require_admin`，不要自己另外寫。
+2. 登入檢查和資料庫連線一律用 `common/` 提供的 `user: LoginUser`／`user: AdminUser`、`db: DB`，不要自己另外寫（用法見 [`common/README.md`](common/README.md)）。
 3. 每個人都要有自己的 commit 紀錄（這是評分項目），請小量、常常 commit。
 
 ---
@@ -95,6 +95,60 @@ uv sync
 | Adminer（網頁管理介面） | <http://localhost:8080>，System 選 PostgreSQL，Server 填 `db` |
 
 > port 用 **5433** 而不是預設的 5432，是為了避開電腦上原本安裝的 PostgreSQL。
+
+## 本地模式與雲端模式
+
+登入頁上方有切換開關，導覽列右上角會一直顯示目前的模式。
+
+| | 本地模式 | 雲端模式 |
+|---|---|---|
+| 資料庫 | 自己電腦的 Docker（port 5433） | AWS 主機上的 PostgreSQL（透過 SSH 通道，port 5434） |
+| 用途 | 開發、測試，資料只有自己看得到 | **資料會真的寫入**，全組共用、demo 用 |
+| 需要 | `docker compose up -d` | SSH 通道 + `.env` 的 `CLOUD_DATABASE_URL` |
+
+- **切換模式會自動登出**：兩邊是不同的資料庫，同一個 id 可能是不同的人。
+- 兩邊的測試帳號一樣（見下方），但之後各自新增的資料互不相通。
+
+### 使用雲端模式
+
+AWS 上的資料庫**不對外開放**，只能從主機內部連。所以要先開一條 SSH 通道，把你電腦的 port 5434 接到主機內部的 PostgreSQL：
+
+```bash
+# 開一個新的終端機執行，開著不要關（關掉就連不上）
+ssh -N -L 5434:127.0.0.1:5432 <帳號>@<AWS 主機 IP> -i <你的 key>
+```
+
+主機帳號（依模組分配）：
+
+| 模組 | 主機帳號 |
+|---|---|
+| ① 空間查詢 | `s113213005-droid` |
+| ③ 課程排課 | `wenyufennn` |
+
+然後在 `.env` 加上（密碼和主機資訊請向組長索取，**不要 commit**）：
+
+```
+CLOUD_DATABASE_URL=postgresql://ims:<密碼>@localhost:5434/ims
+```
+
+重新啟動網站後，登入頁就能選「雲端模式」。如果通道沒開，頁面會顯示「連不上雲端資料庫」；把通道開起來後重新整理就會恢復，**不用重啟網站**。
+
+### 組員的主機帳號能做什麼
+
+為了安全，組員帳號的權限被限制在最小範圍：
+
+| 可以 | 不可以 |
+|---|---|
+| 開 SSH 通道連 PostgreSQL（上面的指令） | 登入 shell、執行任何指令、sudo |
+| 用 SFTP 上傳／下載 demo 目錄的檔案 | 看到 demo 目錄以外的任何檔案 |
+| 刪除、替換 demo 目錄裡任何人的檔案 | 轉接到 PostgreSQL 以外的服務 |
+
+```bash
+# 用 SFTP 管理 demo 目錄（登入後就在 /demo）
+sftp -i <你的私鑰> <帳號>@<AWS 主機 IP>
+```
+
+> 用 SFTP 上傳的檔案，其他組員**不能直接覆寫**，但可以先刪除再重新上傳。
 
 ## 測試帳號
 
