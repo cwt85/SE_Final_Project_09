@@ -1,0 +1,35 @@
+{% extends "common/base.html" %}
+{% block title %}空間查詢 - 管院空間系統{% endblock %}
+{% block content %}
+<h1>空間查詢</h1>
+
+{% if user and user.role == 'admin' %}
+  <p><a class="button" href="/spaces/admin">管理教室資料</a></p>
+{% endif %}
+
+<div class="todo">
+  <strong>TODO（模組①）</strong>：管院平面圖，在圖上標示教室位置（使用 rooms.map_x / map_y 百分比座標）
+</div>
+
+{% set TYPE_LABELS = {'classroom': '教室', 'computer_lab': '電腦教室', 'meeting': '會議室', 'other': '其他'} %}
+
+<div class="table-wrap">
+<table>
+  <thead><tr><th>編號</th><th>名稱</th><th>類型</th><th>樓層</th><th>容量</th><th>開放借用</th></tr></thead>
+  <tbody>
+  {% for r in rooms %}
+    <tr>
+      <td><a href="/spaces/{{ r.id }}">{{ r.room_code }}</a></td>
+      <td>{{ r.name }}</td>
+      <td>{{ TYPE_LABELS[r.room_type] }}</td>
+      <td>{{ r.floor ~ 'F' if r.floor is not none else '-' }}</td>
+      <td>{{ r.capacity or '-' }}</td>
+      <td>{{ '是' if r.is_bookable else '否' }}</td>
+    </tr>
+  {% else %}
+    <tr><td colspan="6" class="muted">目前沒有空間資料</td></tr>
+  {% endfor %}
+  </tbody>
+</table>
+</div>
+{% endblock %}

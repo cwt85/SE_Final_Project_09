@@ -1,0 +1,28 @@
+[project]
+name = "db-basic-example"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+authors = [
+    { name = "陳瑋廷", email = "cwt5278@gmail.com" }
+]
+requires-python = ">=3.13"
+dependencies = [
+    "bcrypt>=5.0.0",
+    "fastapi[standard]>=0.115.0",
+    "itsdangerous>=2.2.0",
+    "mysql-connector-python>=26.7.0",
+    "psycopg[binary,pool]>=3.3.6",
+    "python-multipart>=0.0.32",
+]
+
+[project.scripts]
+db-basic-example = "db_basic_example:main"
+
+[build-system]
+requires = ["uv_build>=0.12.22,<0.13.0"]
+build-backend = "uv_build"
+
+[tool.uv]
+# 這是應用程式而不是要發佈的套件，不需要 build（否則會找不到 src/ 而失敗）
+package = false

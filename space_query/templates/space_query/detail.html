@@ -1,0 +1,26 @@
+{% extends "common/base.html" %}
+{% block title %}{{ room.room_code }} - 管院空間系統{% endblock %}
+{% block content %}
+<p><a href="/spaces">← 回空間列表</a></p>
+<h1>{{ room.room_code }} {{ room.name }}</h1>
+
+<table>
+  <tr><th>樓層</th><td>{{ room.floor ~ 'F' if room.floor is not none else '-' }}</td></tr>
+  <tr><th>容量</th><td>{{ room.capacity or '-' }} 人</td></tr>
+  <tr><th>設備</th><td>{{ room.equipment or '-' }}</td></tr>
+  <tr><th>說明</th><td>{{ room.description or '-' }}</td></tr>
+</table>
+
+{# 整合點：空間查詢 → 借用。只有開放借用的空間顯示按鈕 #}
+{% if room.is_bookable %}
+  <p><a class="button" href="/booking/new?room_id={{ room.id }}">預約這個空間</a></p>
+{% endif %}
+
+<div class="todo">
+  <strong>TODO（模組①）</strong>
+  <ul>
+    <li>360° 全景照片：用 Pannellum 顯示 room.panorama_url（目前：{{ room.panorama_url or '未設定' }}）</li>
+    <li>平面圖：在 room.floor_plan_url 上標出 (map_x, map_y) = ({{ room.map_x }}, {{ room.map_y }})%</li>
+  </ul>
+</div>
+{% endblock %}

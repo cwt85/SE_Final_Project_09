@@ -1,0 +1,40 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% block title %}管院空間系統{% endblock %}</title>
+  <link rel="stylesheet" href="/static/common/style.css">
+  {# 各模組需要額外的 CSS / JS（例如 Pannellum、週曆套件）時，覆寫這個 block #}
+  {% block head %}{% endblock %}
+</head>
+<body>
+  {# ===== 共用導覽列：所有模組的頁面都繼承這個檔案，所以導覽列只要寫一次 ===== #}
+  <header class="navbar">
+    <a class="brand" href="/">管院空間系統</a>
+    <nav class="nav-links">
+      <a href="/spaces">空間查詢</a>
+      <a href="/booking">空間借用</a>
+      <a href="/schedule">課程排課</a>
+      {% if user and user.role == 'admin' %}
+        <a href="/admin/users">帳號管理</a>
+      {% endif %}
+    </nav>
+    <div class="nav-user">
+      {% if user %}
+        <span>{{ user.full_name }}（{{ ROLE_LABELS[user.role] }}）</span>
+        <a href="/logout">登出</a>
+      {% else %}
+        <a href="/login">登入</a>
+        <a href="/register">註冊</a>
+      {% endif %}
+    </div>
+  </header>
+
+  <main class="container">
+    {% block content %}{% endblock %}
+  </main>
+
+  {% block scripts %}{% endblock %}
+</body>
+</html>

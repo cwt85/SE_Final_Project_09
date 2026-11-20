@@ -1,0 +1,32 @@
+{% extends "common/base.html" %}
+{% block title %}課程排課 - 管院空間系統{% endblock %}
+{% block content %}
+<h1>{{ '所有課程' if is_admin else '我的課程' }}</h1>
+<p>
+  <a class="button" href="/schedule/calendar">週曆檢視</a>
+  {% if is_admin %}<a class="button" href="/schedule/conflicts">衝突清單</a>{% endif %}
+</p>
+
+<div class="todo">
+  <strong>TODO（模組③）</strong>：新增／修改／刪除課程（老師只能改自己的；管理員可以改全部並指派老師）
+</div>
+
+<div class="table-wrap">
+<table>
+  <thead><tr><th>課號</th><th>課名</th><th>授課老師</th><th>時段數</th><th>期間</th></tr></thead>
+  <tbody>
+  {% for c in courses %}
+    <tr>
+      <td>{{ c.course_code or '' }}</td>
+      <td>{{ c.name }}</td>
+      <td>{{ c.teacher_name }}</td>
+      <td>{{ c.session_count }}</td>
+      <td>{% if c.first_date %}{{ c.first_date }} ～ {{ c.last_date }}{% else %}-{% endif %}</td>
+    </tr>
+  {% else %}
+    <tr><td colspan="5" class="muted">目前沒有課程</td></tr>
+  {% endfor %}
+  </tbody>
+</table>
+</div>
+{% endblock %}

@@ -1,0 +1,29 @@
+{% extends "common/base.html" %}
+{% block title %}註冊 - 管院空間系統{% endblock %}
+{% block content %}
+<div class="form-box">
+  <h1>註冊帳號</h1>
+  <p class="muted">註冊後需由管理員審核通過才能登入。</p>
+
+  {% if error %}<p class="alert alert-error">{{ error }}</p>{% endif %}
+
+  <form method="post" action="/register">
+    <label>帳號（學號或教職員編號）
+      <input name="username" value="{{ form.username or '' }}" maxlength="50" required autofocus>
+    </label>
+    <label>姓名
+      <input name="full_name" value="{{ form.full_name or '' }}" maxlength="50" required>
+    </label>
+    <label>Email
+      <input type="email" name="email" value="{{ form.email or '' }}" maxlength="100">
+    </label>
+    <label>密碼（至少 6 個字元）
+      <input type="password" name="password" minlength="6" required>
+    </label>
+    <label>再輸入一次密碼
+      <input type="password" name="password2" minlength="6" required>
+    </label>
+    <button type="submit">送出註冊</button>
+  </form>
+</div>
+{% endblock %}

@@ -1,0 +1,20 @@
+{% extends "common/base.html" %}
+{% block content %}
+<h1>管院空間系統</h1>
+<p class="muted">暨南大學管理學院 空間查詢・預約借用・課程排課</p>
+
+<div class="cards">
+  <a class="card" href="/spaces">
+    <h2>空間查詢</h2>
+    <p>瀏覽教室資訊、360° 全景照片與平面圖位置。不需登入。</p>
+  </a>
+  <a class="card" href="/booking">
+    <h2>空間借用</h2>
+    <p>查看教室每週借用狀況，預約教室並借用鑰匙、投影筆等物品。</p>
+  </a>
+  <a class="card" href="/schedule">
+    <h2>課程排課</h2>
+    <p>老師登記上課時段，以週曆檢視排課狀態與時間衝突。</p>
+  </a>
+</div>
+{% endblock %}

@@ -1,0 +1,48 @@
+# docker-compose.yml
+# 開發用的資料庫環境：PostgreSQL + Adminer（網頁版資料庫管理工具）
+# 啟動：docker compose up -d
+# 重建資料庫（清空所有資料並重新執行 sql/ 裡的腳本）：docker compose down -v && docker compose up -d
+
+services:
+  db:
+    image: postgres:18                       # 和範例 students.sql 的版本一致
+    container_name: ims-db
+    restart: unless-stopped
+    environment:
+      # 帳密從 .env 讀取（.env 不進 git，請參考 .env.example）
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?請先建立 .env 並設定 POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB:-ims}
+      TZ: Asia/Taipei                        # 讓 now()、CURRENT_DATE 用台灣時間
+      PGTZ: Asia/Taipei
+    ports:
+      # 主機的 5433 → 容器的 5432
+      # 用 5433 是為了避開你電腦上原本安裝的 PostgreSQL（它佔用 5432）
+      - "${DB_PORT:-5433}:5432"
+    volumes:
+      # 資料存在具名 volume，容器刪掉資料也還在
+      # PostgreSQL 18 起官方建議掛載到 /var/lib/postgresql（不是 .../data）
+      - pgdata:/var/lib/postgresql
+      # 這個資料夾裡的 .sql 會在「第一次」建立資料庫時，依檔名順序自動執行
+      - ./sql:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      # 讓 docker 知道資料庫什麼時候真的可以連線了
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  adminer:
+    image: adminer:5
+    container_name: ims-adminer
+    restart: unless-stopped
+    ports:
+      - "${ADMINER_PORT:-8080}:8080"         # 瀏覽器開 http://localhost:8080
+    environment:
+      ADMINER_DEFAULT_SERVER: db             # 預設連到上面的 db 服務
+    depends_on:
+      db:
+        condition: service_healthy
+
+volumes:
+  pgdata:

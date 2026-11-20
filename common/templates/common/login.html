@@ -1,0 +1,23 @@
+{% extends "common/base.html" %}
+{% block title %}登入 - 管院空間系統{% endblock %}
+{% block content %}
+<div class="form-box">
+  <h1>登入</h1>
+
+  {% if msg %}<p class="alert alert-ok">{{ msg }}</p>{% endif %}
+  {% if error %}<p class="alert alert-error">{{ error }}</p>{% endif %}
+
+  <form method="post" action="/login">
+    {# 登入成功後要回到哪一頁 #}
+    <input type="hidden" name="next" value="{{ next or '/' }}">
+    <label>帳號
+      <input name="username" value="{{ username or '' }}" required autofocus>
+    </label>
+    <label>密碼
+      <input type="password" name="password" required>
+    </label>
+    <button type="submit">登入</button>
+  </form>
+  <p class="muted">還沒有帳號？<a href="/register">註冊</a></p>
+</div>
+{% endblock %}
