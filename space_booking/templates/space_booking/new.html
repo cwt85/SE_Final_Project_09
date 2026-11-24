@@ -1,13 +1,152 @@
 {% extends "common/base.html" %}
 {% block title %}預約借用 - 管院空間系統{% endblock %}
+{% block head %}<link rel="stylesheet" href="/static/space_booking/booking.css">{% endblock %}
 {% block content %}
 <h1>預約借用</h1>
-<div class="todo">
-  <strong>TODO（模組②）</strong>
-  <ul>
-    <li>選擇空間{% if room_id %}（從空間查詢帶入：room_id = {{ room_id }}）{% endif %}，以週為單位顯示該空間的借用狀況</li>
-    <li>填寫日期、時間區間、事由，勾選借用物品（可多項）</li>
-    <li>送出前檢查時段衝突（含排課），有衝突就不能送出</li>
-  </ul>
-</div>
+
+{% if error %}
+  <div class="alert alert-error">
+    {{ error }}
+    {% if problems %}<ul>{% for p in problems %}<li>{{ p }}</li>{% endfor %}</ul>{% endif %}
+  </div>
+{% endif %}
+
+{# ===== 1. 選擇空間（GET：換空間就重新載入頁面，週曆跟著換） ===== #}
+<form method="get" action="/booking/new" class="room-picker">
+  <label>空間
+    <select name="room_id" onchange="this.form.submit()">
+      <option value="">-- 請選擇空間 --</option>
+      {% for r in rooms %}
+        <option value="{{ r.id }}" {% if room and r.id == room.id %}selected{% endif %}>
+          {{ r.room_code }} {{ r.name }}{% if r.capacity %}（{{ r.capacity }} 人）{% endif %}
+        </option>
+      {% endfor %}
+    </select>
+  </label>
+  <input type="hidden" name="week" value="{{ monday }}">
+  <noscript><button type="submit">查看</button></noscript>
+</form>
+
+{% if room %}
+{# ===== 2. 當週借用狀況 ===== #}
+<section>
+  <div class="week-nav">
+    <a class="button secondary" href="/booking/new?room_id={{ room.id }}&week={{ prev_week }}">‹ 上一週</a>
+    <strong>{{ room.room_code }}　{{ monday }} ～ {{ sunday }}</strong>
+    <a class="button secondary" href="/booking/new?room_id={{ room.id }}&week={{ next_week }}">下一週 ›</a>
+    <a href="/booking/new?room_id={{ room.id }}">回到本週</a>
+  </div>
+  <p class="legend">
+    <span class="ev ev-course">上課</span>
+    <span class="ev ev-booking">已核准借用</span>
+    <span class="ev ev-pending">審核中（不算占用）</span>
+    <span class="muted">點週曆空白處可以直接帶入日期與時間</span>
+  </p>
+
+  <div class="calendar" style="--hours: {{ hours|length }}">
+    {# 左邊的時間刻度 #}
+    <div class="cal-times">
+      <div class="cal-head"></div>
+      <div class="cal-body">
+        {% for h in hours %}<div class="cal-hour-label">{{ h }}</div>{% endfor %}
+      </div>
+    </div>
+    {# 七天，每天一欄；事件用百分比定位（位置在後端算好） #}
+    {% for day in calendar %}
+      <div class="cal-day {% if day.date == today %}is-today{% endif %} {% if day.date < today %}is-past{% endif %}">
+        <div class="cal-head">{{ day.label }}<br><small>{{ day.date.strftime('%m/%d') }}</small></div>
+        <div class="cal-body" data-date="{{ day.date }}">
+          {% for ev in day.events %}
+            <div class="ev ev-{{ ev.kind }}" style="top: {{ ev.top }}%; height: {{ ev.height }}%"
+                 title="{{ ev.time_text }} {{ ev.title }}">
+              <strong>{{ ev.time_text }}</strong> {{ ev.title }}
+            </div>
+          {% endfor %}
+        </div>
+      </div>
+    {% endfor %}
+  </div>
+</section>
+
+{# ===== 3. 預約表單 ===== #}
+<section class="form-card">
+  <h2>填寫預約：{{ room.room_code }} {{ room.name }}</h2>
+  <form method="post" action="/booking/new" id="booking-form">
+    <input type="hidden" name="room_id" value="{{ room.id }}">
+    <div class="form-row">
+      <label>日期
+        <input type="date" name="booking_date" required min="{{ today }}" value="{{ form.booking_date or '' }}">
+      </label>
+      {# step=300：以 5 分鐘為單位（秒數），例如 08:55 可以、08:57 不行 #}
+      <label>開始時間
+        <input type="time" name="start_time" required min="{{ open_time }}" max="{{ close_time }}" step="300"
+               value="{{ form.start_time or '' }}">
+      </label>
+      <label>結束時間
+        <input type="time" name="end_time" required min="{{ open_time }}" max="{{ close_time }}" step="300"
+               value="{{ form.end_time or '' }}">
+      </label>
+    </div>
+    <p class="muted small">開放借用時間 {{ open_time }}–{{ close_time }}；剛好接在別人後面（例如 10:00 結束、10:00 開始）不算衝突。</p>
+
+    <label>借用事由
+      <input type="text" name="purpose" maxlength="200" placeholder="例如：專題討論、社團會議" value="{{ form.purpose or '' }}">
+    </label>
+
+    <h3>借用物品（可多項，不借請留空或填 0）</h3>
+    <div class="table-wrap">
+    <table>
+      <thead><tr><th>物品</th><th>類別</th><th>總數</th><th>借用數量</th></tr></thead>
+      <tbody>
+      {% for it in item_options %}
+        {% set field = 'qty_' ~ it.id %}
+        <tr>
+          <td>{{ it.name }}</td>
+          <td>{{ CATEGORY_LABELS[it.category] }}</td>
+          <td>{{ it.total_quantity }}</td>
+          <td><input type="number" class="qty" name="{{ field }}" min="0" max="{{ it.total_quantity }}" step="1"
+                     value="{{ form.qty.get(field, '') if form.qty else '' }}"></td>
+        </tr>
+      {% else %}
+        <tr><td colspan="4" class="muted">目前沒有可借用的物品</td></tr>
+      {% endfor %}
+      </tbody>
+    </table>
+    </div>
+
+    <p><button type="submit">送出預約申請</button></p>
+    <p class="muted small">送出後由管理員審核；審核通過前，這個時段仍可能被別人申請。</p>
+  </form>
+</section>
+{% elif not error %}
+  <p class="muted">請先選擇要借用的空間，就會顯示該空間這一週的借用狀況。</p>
+{% endif %}
+{% endblock %}
+
+{% block scripts %}
+<script>
+// 點週曆空白處 → 自動填入日期和時間（以 30 分鐘為單位，預設借 1 小時）
+// 這只是方便填寫；真正的衝突檢查在後端
+(function () {
+  const form = document.getElementById('booking-form');
+  if (!form) return;
+  const openMin = {{ hours[0][:2]|int }} * 60;     // 週曆開始時間（分鐘）
+  const totalMin = {{ hours|length }} * 60;         // 週曆總長度（分鐘）
+  const pad = n => String(n).padStart(2, '0');
+  const fmt = m => pad(Math.floor(m / 60)) + ':' + pad(m % 60);
+
+  document.querySelectorAll('.cal-body[data-date]').forEach(col => {
+    col.addEventListener('click', e => {
+      if (e.target !== col) return;                 // 點到已占用的方塊就不動作
+      const ratio = e.offsetY / col.clientHeight;   // 點在這一欄的哪個高度（0～1）
+      let start = openMin + Math.floor(ratio * totalMin / 30) * 30;
+      let end = Math.min(start + 60, openMin + totalMin);
+      form.booking_date.value = col.dataset.date;
+      form.start_time.value = fmt(start);
+      form.end_time.value = fmt(end);
+      form.scrollIntoView({ behavior: 'smooth' });
+    });
+  });
+})();
+</script>
 {% endblock %}

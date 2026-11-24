@@ -1,5 +1,6 @@
 {% extends "common/base.html" %}
 {% block title %}我的借用 - 管院空間系統{% endblock %}
+{% block head %}<link rel="stylesheet" href="/static/space_booking/booking.css">{% endblock %}
 {% block content %}
 <h1>我的借用紀錄</h1>
 <p>
@@ -7,25 +8,40 @@
   {% if user.role == 'admin' %}<a class="button" href="/booking/admin">借用管理</a>{% endif %}
 </p>
 
-{% set STATUS_LABELS = {'pending': '待審核', 'approved': '已核准', 'rejected': '已退件',
-                        'checked_out': '已借出', 'returned': '已歸還', 'cancelled': '已取消'} %}
+{# 從其他頁導回來時的訊息（?msg= / ?error=） #}
+{% if msg %}<p class="alert alert-ok">{{ msg }}</p>{% endif %}
+{% if error %}<p class="alert alert-error">{{ error }}</p>{% endif %}
 
 <div class="table-wrap">
 <table>
-  <thead><tr><th>日期</th><th>時段</th><th>空間</th><th>事由</th><th>物品</th><th>狀態</th><th>審核意見</th></tr></thead>
+  <thead><tr><th>#</th><th>日期</th><th>時段</th><th>空間</th><th>事由</th><th>物品</th><th>狀態</th><th>審核意見／經手紀錄</th><th></th></tr></thead>
   <tbody>
   {% for b in bookings %}
     <tr>
+      <td>{{ b.id }}</td>
       <td>{{ b.booking_date }}</td>
       <td>{{ b.start_time.strftime('%H:%M') }}–{{ b.end_time.strftime('%H:%M') }}</td>
       <td>{{ b.room_code }} {{ b.room_name }}</td>
       <td>{{ b.purpose or '' }}</td>
       <td>{{ b.item_list or '-' }}</td>
       <td><span class="badge badge-{{ b.status }}">{{ STATUS_LABELS[b.status] }}</span></td>
-      <td>{{ b.review_comment or '' }}</td>
+      <td class="small">
+        {% if b.review_comment %}{{ b.review_comment }}<br>{% endif %}
+        {% if b.checked_out_text %}<span class="muted">借出：{{ b.checked_out_text }}</span><br>{% endif %}
+        {% if b.returned_text %}<span class="muted">歸還：{{ b.returned_text }}</span>{% endif %}
+      </td>
+      <td>
+        {# 只有待審核的單可以取消（後端也會再檢查一次） #}
+        {% if b.status == 'pending' %}
+          <form class="inline" method="post" action="/booking/{{ b.id }}/cancel"
+                onsubmit="return confirm('確定要取消這筆借用申請嗎？')">
+            <button type="submit" class="secondary small-button">取消</button>
+          </form>
+        {% endif %}
+      </td>
     </tr>
   {% else %}
-    <tr><td colspan="7" class="muted">目前沒有借用紀錄</td></tr>
+    <tr><td colspan="9" class="muted">目前沒有借用紀錄</td></tr>
   {% endfor %}
   </tbody>
 </table>

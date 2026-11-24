@@ -1,0 +1,69 @@
+/* space_booking/static/booking.css：模組② 預約借用專用樣式 → /static/space_booking/booking.css */
+
+.small { font-size: 0.85rem; }
+.small-button { padding: 4px 10px; font-size: 0.85rem; }
+button.danger { background: #b42323; }
+button.danger:hover { background: #8f1b1b; }
+button:disabled { background: #bbb; cursor: not-allowed; }
+.warn { margin: 0 0 6px; color: #8a6100; font-size: 0.85rem; }
+.alert ul { margin: 6px 0 0; padding-left: 20px; }
+
+/* ---------- 選空間、換週 ---------- */
+.room-picker { max-width: 420px; }
+.week-nav { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 16px; margin: 8px 0; }
+.week-nav .button.secondary { background: #888; }
+.legend { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; }
+.legend .ev { position: static; display: inline-block; padding: 2px 8px; }
+
+/* ---------- 週曆 ----------
+   每天一欄，欄的高度固定；事件方塊用 position: absolute + 百分比 top/height 放到正確時間。
+   --hours 由模板設定（營業時間共幾小時），每小時 40px 高。 */
+.calendar {
+  --hour-h: 40px;
+  display: grid; grid-template-columns: 56px repeat(7, minmax(90px, 1fr));
+  overflow-x: auto;           /* 手機上可以左右捲動 */
+  background: var(--card); border: 1px solid var(--border); border-radius: 6px;
+}
+.cal-head {
+  height: 48px; padding: 4px; text-align: center; line-height: 1.3;
+  background: #eef2f6; border-bottom: 1px solid var(--border);
+}
+.cal-body {
+  position: relative; height: calc(var(--hours) * var(--hour-h));
+  /* 每小時畫一條淡淡的橫線 */
+  background-image: linear-gradient(to bottom, var(--border) 1px, transparent 1px);
+  background-size: 100% var(--hour-h);
+}
+.cal-day { border-left: 1px solid var(--border); }
+.cal-day .cal-body { cursor: pointer; }
+.cal-day.is-today .cal-head { background: #dbe9f5; font-weight: bold; }
+.cal-day.is-past .cal-body { background-color: #f3f3f3; cursor: default; }
+.cal-hour-label { height: var(--hour-h); padding-right: 6px; text-align: right; font-size: 0.75rem; color: var(--muted); }
+
+/* 事件方塊 */
+.ev {
+  position: absolute; left: 3px; right: 3px; overflow: hidden;
+  padding: 2px 4px; border-radius: 4px; font-size: 0.75rem; line-height: 1.25;
+  cursor: default;
+}
+.ev-course  { background: #dbe7f7; border-left: 3px solid #1f5f8b; color: #12324a; }
+.ev-booking { background: #e7f6ec; border-left: 3px solid #1d6b3a; color: #124226; }
+.ev-pending { background: #fffbea; border: 1px dashed #c99a00; color: #6b4d00; }
+
+/* ---------- 預約表單 ---------- */
+.form-card {
+  margin-top: 24px; padding: 20px;
+  background: var(--card); border: 1px solid var(--border); border-radius: 8px;
+}
+.form-card h2 { margin-top: 0; }
+.form-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 0 16px; }
+input.qty { width: 90px; margin: 0; }
+
+/* ---------- 管理頁 ---------- */
+.tabs { display: flex; flex-wrap: wrap; gap: 4px; margin-bottom: 12px; border-bottom: 2px solid var(--border); }
+.tabs a { padding: 8px 14px; text-decoration: none; border-radius: 6px 6px 0 0; }
+.tabs a.active { background: var(--primary); color: #fff; }
+td.actions { min-width: 200px; }
+td.actions input { margin: 0 0 6px; padding: 4px 6px; }
+.btn-row { display: flex; gap: 6px; }
+.btn-row button { padding: 4px 12px; }
