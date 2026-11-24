@@ -1,14 +1,81 @@
 {% extends "common/base.html" %}
 {% block title %}借用管理 - 管院空間系統{% endblock %}
+{% block head %}<link rel="stylesheet" href="/static/space_booking/booking.css">{% endblock %}
 {% block content %}
 <h1>借用管理</h1>
-<div class="todo">
-  <strong>TODO（模組②）</strong>
-  <ul>
-    <li>審核：通過或退件，可加註審核意見</li>
-    <li>領用：登記鑰匙與物品借出</li>
-    <li>歸還：確認歸還</li>
-    <li>瀏覽所有借用紀錄</li>
-  </ul>
+
+{% if msg %}<p class="alert alert-ok">{{ msg }}</p>{% endif %}
+{% if error %}<p class="alert alert-error">{{ error }}</p>{% endif %}
+
+{# ===== 分頁：待審核 → 待領用 → 待歸還 → 全部 ===== #}
+<nav class="tabs">
+  {% for key, label, status in tabs %}
+    <a href="/booking/admin?tab={{ key }}" class="{% if key == tab %}active{% endif %}">
+      {{ label }}（{{ counts.get(status, 0) if status else total }}）
+    </a>
+  {% endfor %}
+</nav>
+
+<div class="table-wrap">
+<table>
+  <thead>
+    <tr><th>#</th><th>日期／時段</th><th>空間</th><th>申請人</th><th>事由</th><th>物品</th><th>狀態</th><th>紀錄</th><th>處理</th></tr>
+  </thead>
+  <tbody>
+  {% for b in bookings %}
+    <tr>
+      <td>{{ b.id }}</td>
+      <td>
+        {{ b.booking_date }}<br>
+        {{ b.start_time.strftime('%H:%M') }}–{{ b.end_time.strftime('%H:%M') }}
+      </td>
+      <td>{{ b.room_code }}<br><span class="muted small">{{ b.room_name }}</span></td>
+      <td>{{ b.applicant }}<br><span class="muted small">{{ b.applicant_username }}</span></td>
+      <td>{{ b.purpose or '' }}</td>
+      <td>{{ b.item_list or '-' }}</td>
+      <td><span class="badge badge-{{ b.status }}">{{ STATUS_LABELS[b.status] }}</span></td>
+      <td class="small">
+        <span class="muted">申請：{{ b.created_text }}</span>
+        {% if b.reviewed_text %}<br>審核：{{ b.reviewer_name }} {{ b.reviewed_text }}{% endif %}
+        {% if b.review_comment %}<br>意見：{{ b.review_comment }}{% endif %}
+        {% if b.checked_out_text %}<br>借出：{{ b.checked_out_name }} {{ b.checked_out_text }}{% endif %}
+        {% if b.returned_text %}<br>歸還：{{ b.returned_name }} {{ b.returned_text }}{% endif %}
+      </td>
+      <td class="actions">
+        {% if b.status == 'pending' %}
+          {# 後端在列表時先檢查過衝突／物品數量，有問題就提醒；按「通過」時後端會再檢查一次 #}
+          {% for w in b.warnings %}<p class="warn">⚠ {{ w }}</p>{% endfor %}
+          <form method="post" action="/booking/admin/{{ b.id }}/review">
+            <input type="hidden" name="tab" value="{{ tab }}">
+            <input type="text" name="comment" maxlength="200" placeholder="審核意見（選填）">
+            <div class="btn-row">
+              <button type="submit" name="action" value="approve" {% if b.warnings %}disabled title="有衝突或物品不足，無法通過"{% endif %}>通過</button>
+              <button type="submit" name="action" value="reject" class="danger">退件</button>
+            </div>
+          </form>
+        {% elif b.status == 'approved' %}
+          <form method="post" action="/booking/admin/{{ b.id }}/checkout">
+            <input type="hidden" name="tab" value="{{ tab }}">
+            <button type="submit">登記借出</button>
+          </form>
+        {% elif b.status == 'checked_out' %}
+          {# 借用時段已結束還沒歸還 → 標示逾期 #}
+          {% if b.booking_date < today or (b.booking_date == today and b.end_time <= now_time) %}
+            <p class="warn">⚠ 已超過借用時段，尚未歸還</p>
+          {% endif %}
+          <form method="post" action="/booking/admin/{{ b.id }}/return">
+            <input type="hidden" name="tab" value="{{ tab }}">
+            <button type="submit">確認歸還</button>
+          </form>
+        {% else %}
+          <span class="muted">—</span>
+        {% endif %}
+      </td>
+    </tr>
+  {% else %}
+    <tr><td colspan="9" class="muted">沒有符合的借用單</td></tr>
+  {% endfor %}
+  </tbody>
+</table>
 </div>
 {% endblock %}

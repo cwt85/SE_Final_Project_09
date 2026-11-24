@@ -17,7 +17,7 @@
 from datetime import date, time, timedelta
 from urllib.parse import urlencode
 
-from fastapi import APIRouter, Depends, Request
+from fastapi import APIRouter, Depends, Form, Request
 from fastapi.responses import RedirectResponse
 
 from common.auth import AdminUser, LoginUser, require_login
@@ -39,6 +39,14 @@ STATUS_LABELS = {
 	"checked_out": "已借出", "returned": "已歸還", "cancelled": "已取消",
 }
 CATEGORY_LABELS = {"key": "鑰匙", "device": "設備", "other": "其他"}
+
+# 管理頁的分頁：(網址參數, 顯示名稱, 要查的狀態；None = 全部)
+ADMIN_TABS = [
+	("pending", "待審核", "pending"),
+	("approved", "待領用", "approved"),
+	("checked_out", "待歸還", "checked_out"),
+	("all", "全部紀錄", None),
+]
 
 # PostgreSQL「交易層級鎖」的編號（隨便選一個不會和別人撞的數字）。
 # 為什麼要鎖？兩個管理員同時核准同一時段的兩張單，可能都先檢查「沒衝突」再寫入，
@@ -157,6 +165,35 @@ async def item_shortages(
 		left = row["total_quantity"] - row["in_use"]
 		if requested[row["id"]] > left:
 			problems.append(f"{row['name']}：這個時段只剩 {max(left, 0)} 個，申請了 {requested[row['id']]} 個")
+	return problems
+
+
+async def checkout_shortages(db, booking_id: int) -> list[str]:
+	"""
+	登記借出前，確認物品「實際上」還在架上：
+	其他已借出（checked_out）還沒歸還的單子，不管哪一天的，都佔著實體物品。
+	"""
+	cur = await db.execute(
+		"""SELECT i.name, i.total_quantity, bi.quantity,
+		          COALESCE((
+		              SELECT SUM(bi2.quantity)
+		              FROM booking_items bi2
+		              JOIN bookings b2 ON b2.id = bi2.booking_id
+		              WHERE bi2.item_id = bi.item_id
+		                AND b2.status = 'checked_out'
+		                AND b2.id <> bi.booking_id
+		          ), 0) AS out_now
+		   FROM booking_items bi
+		   JOIN items i ON i.id = bi.item_id
+		   WHERE bi.booking_id = %s
+		   ORDER BY i.id""",
+		(booking_id,),
+	)
+	problems = []
+	for row in await cur.fetchall():
+		left = row["total_quantity"] - row["out_now"]
+		if row["quantity"] > left:
+			problems.append(f"{row['name']}：目前架上只剩 {max(left, 0)} 個（其他人借出未還），需要 {row['quantity']} 個")
 	return problems
 
 
@@ -414,7 +451,135 @@ async def cancel_booking(booking_id: int, user: LoginUser, db: DB):
 # 管理員：審核、借出、歸還
 # =========================================================
 @router.get("/admin")
-async def booking_admin(request: Request, user: AdminUser):
-	"""管理員：審核、登記借出、確認歸還。"""
-	# TODO: 列出待審核／待領用／待歸還的借用單
-	return render(request, "space_booking/admin.html")
+async def booking_admin(request: Request, user: AdminUser, db: DB, tab: str = "pending",
+                        msg: str | None = None, error: str | None = None):
+	"""管理員：依分頁列出待審核／待領用／待歸還／全部的借用單。"""
+	tabs = {key: (label, status) for key, label, status in ADMIN_TABS}
+	if tab not in tabs:
+		tab = "pending"
+	bookings = await fetch_bookings(db, status=tabs[tab][1])
+	if tab == "all":
+		bookings.reverse()  # 全部紀錄：新的排前面
+
+	# 待審核的單先幫管理員檢查一次衝突和物品數量，有問題直接在畫面上提醒
+	for b in bookings:
+		b["warnings"] = []
+		if b["status"] == "pending":
+			for c in await find_conflicts(db, b["room_id"], b["booking_date"], b["start_time"], b["end_time"]):
+				b["warnings"].append(
+					f"時段衝突（{'上課' if c['source'] == 'course' else '借用'}：{c['title']} "
+					f"{c['start_time']:%H:%M}–{c['end_time']:%H:%M}）"
+				)
+			cur = await db.execute(
+				"SELECT item_id, quantity FROM booking_items WHERE booking_id = %s", (b["id"],)
+			)
+			requested = {r["item_id"]: r["quantity"] for r in await cur.fetchall()}
+			b["warnings"] += await item_shortages(
+				db, b["booking_date"], b["start_time"], b["end_time"], requested, exclude_booking_id=b["id"]
+			)
+
+	# 各分頁的筆數
+	cur = await db.execute("SELECT status, count(*) AS n FROM bookings GROUP BY status")
+	counts = {r["status"]: r["n"] for r in await cur.fetchall()}
+	today, now_time = await db_now(db)
+	return render(
+		request, "space_booking/admin.html",
+		bookings=bookings, tab=tab, tabs=ADMIN_TABS, counts=counts, total=sum(counts.values()),
+		STATUS_LABELS=STATUS_LABELS, msg=msg, error=error, today=today, now_time=now_time,
+	)
+
+
+async def load_booking(db, booking_id: int) -> dict | None:
+	"""讀一張借用單，並用 FOR UPDATE 鎖住這一列，避免同時被別人改。"""
+	cur = await db.execute(
+		"""SELECT id, room_id, booking_date, start_time, end_time, status
+		   FROM bookings WHERE id = %s FOR UPDATE""",
+		(booking_id,),
+	)
+	return await cur.fetchone()
+
+
+@router.post("/admin/{booking_id}/review")
+async def review_booking(
+	booking_id: int,
+	user: AdminUser,
+	db: DB,
+	action: str = Form(...),
+	comment: str = Form(""),
+	tab: str = Form("pending"),
+):
+	"""審核：通過（approve）或退件（reject），可加註審核意見。"""
+	back = "/booking/admin"
+	comment = comment.strip() or None
+	if action not in ("approve", "reject"):
+		return redirect(back, tab=tab, error="不明的審核動作")
+
+	await lock_bookings(db)
+	b = await load_booking(db, booking_id)
+	if b is None or b["status"] != "pending":
+		return redirect(back, tab=tab, error=f"借用單 #{booking_id} 不是待審核狀態，可能已被處理")
+
+	if action == "approve":
+		# 審核通過前要再檢查一次：pending 不算占用，可能有別人的單先被核准、或排課後來加進來
+		today, now_time = await db_now(db)
+		if b["booking_date"] < today or (b["booking_date"] == today and b["end_time"] <= now_time):
+			return redirect(back, tab=tab, error=f"借用單 #{booking_id} 的時段已經過去，只能退件")
+		conflicts = await find_conflicts(db, b["room_id"], b["booking_date"], b["start_time"], b["end_time"],
+		                                 exclude_source="booking", exclude_id=booking_id)
+		if conflicts:
+			names = "、".join(f"{c['title']}（{c['start_time']:%H:%M}–{c['end_time']:%H:%M}）" for c in conflicts)
+			return redirect(back, tab=tab, error=f"借用單 #{booking_id} 與 {names} 時段衝突，無法通過")
+		cur = await db.execute(
+			"SELECT item_id, quantity FROM booking_items WHERE booking_id = %s", (booking_id,)
+		)
+		requested = {r["item_id"]: r["quantity"] for r in await cur.fetchall()}
+		shortages = await item_shortages(db, b["booking_date"], b["start_time"], b["end_time"],
+		                                 requested, exclude_booking_id=booking_id)
+		if shortages:
+			return redirect(back, tab=tab, error=f"借用單 #{booking_id} 物品不足：" + "；".join(shortages))
+
+	new_status = "approved" if action == "approve" else "rejected"
+	# WHERE 再確認一次 status = 'pending'，保證狀態只能照流程往前走
+	await db.execute(
+		"""UPDATE bookings
+		   SET status = %s, review_comment = %s, reviewed_by = %s, reviewed_at = now()
+		   WHERE id = %s AND status = 'pending'""",
+		(new_status, comment, user["id"], booking_id),
+	)
+	return redirect(back, tab=tab, msg=f"借用單 #{booking_id} 已{STATUS_LABELS[new_status]}")
+
+
+@router.post("/admin/{booking_id}/checkout")
+async def checkout_booking(booking_id: int, user: AdminUser, db: DB, tab: str = Form("approved")):
+	"""領用：申請人來拿鑰匙和物品時，由管理員登記借出。"""
+	back = "/booking/admin"
+	await lock_bookings(db)
+	b = await load_booking(db, booking_id)
+	if b is None or b["status"] != "approved":
+		return redirect(back, tab=tab, error=f"借用單 #{booking_id} 不是「已核准」狀態，無法登記借出")
+	shortages = await checkout_shortages(db, booking_id)
+	if shortages:
+		return redirect(back, tab=tab, error=f"借用單 #{booking_id} 無法借出：" + "；".join(shortages))
+	await db.execute(
+		"""UPDATE bookings
+		   SET status = 'checked_out', checked_out_by = %s, checked_out_at = now()
+		   WHERE id = %s AND status = 'approved'""",
+		(user["id"], booking_id),
+	)
+	return redirect(back, tab=tab, msg=f"借用單 #{booking_id} 已登記借出")
+
+
+@router.post("/admin/{booking_id}/return")
+async def return_booking(booking_id: int, user: AdminUser, db: DB, tab: str = Form("checked_out")):
+	"""歸還：管理員確認東西都還回來後登記歸還。"""
+	back = "/booking/admin"
+	cur = await db.execute(
+		"""UPDATE bookings
+		   SET status = 'returned', returned_by = %s, returned_at = now()
+		   WHERE id = %s AND status = 'checked_out'
+		   RETURNING id""",
+		(user["id"], booking_id),
+	)
+	if await cur.fetchone() is None:
+		return redirect(back, tab=tab, error=f"借用單 #{booking_id} 不是「已借出」狀態，無法登記歸還")
+	return redirect(back, tab=tab, msg=f"借用單 #{booking_id} 已登記歸還")
