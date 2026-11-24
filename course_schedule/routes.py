@@ -39,7 +39,29 @@ async def calendar(request: Request):
 
 
 @router.get("/conflicts")
-async def conflicts(request: Request, user: AdminUser):
+async def conflicts(request: Request, user: AdminUser, db: DB):
 	"""管理員：時間衝突的課程清單。"""
-	# TODO: 查詢 SQL 見 docs/database.md 第 5.3 節
-	return render(request, "course_schedule/conflicts.html")
+	cur = await db.execute(
+		"""SELECT a.id AS session_a, ca.name AS course_a,   -- 衝突場次A的ID和場次A所屬課程名稱
+		          b.id AS session_b, cb.name AS course_b,   -- 衝突場次B的ID和場次B所屬課程名稱
+		          a.session_date, r.room_code,   -- 課程日期（兩場次在同一天）和場次A的教室代碼
+				  -- 優先判斷是否為相同教室；若非相同教室則視為同一位老師衝堂
+		          CASE WHEN a.room_id = b.room_id THEN '教室衝突' ELSE '老師衝堂' END AS conflict_type
+		   FROM course_sessions a
+		   -- 自我連接（Self-Join）比對不同課程場次兩兩之間是否時間重疊
+		   JOIN course_sessions b
+		     ON a.id < b.id   -- 避免自己跟自己比對，並排除 (A, B) 與 (B, A) 重複配對
+			 --若允許「前堂 10:00 結束、下堂 10:00 開始」緊鄰排課，使用嚴格小於（<）不會誤判為衝突
+		    AND a.session_date = b.session_date   -- 僅比對同一天的課程
+		    AND a.start_time < b.end_time   -- 區間重疊條件1：A 開始早於 B 結束
+		    AND b.start_time < a.end_time   -- 區間重疊條件2：B 開始早於 A 結束
+		   JOIN courses ca ON ca.id = a.course_id   -- 取得場次A的課程資訊（含授課老師)
+		   JOIN courses cb ON cb.id = b.course_id   -- 取得場次B的課程資訊（含授課老師)
+		   JOIN rooms r ON r.id = a.room_id   -- 取得場次A的教室資訊
+		   -- 篩選出至少符合「同一間教室」或「同一位老師」其中一項的衝突組合
+		   WHERE a.room_id = b.room_id
+		      OR ca.teacher_id = cb.teacher_id
+			-- 依課程日期與場次A的開始時間由早到晚排序
+		   ORDER BY a.session_date, a.start_time"""   
+	)
+	return render(request, "course_schedule/conflicts.html", conflicts=await cur.fetchall())
