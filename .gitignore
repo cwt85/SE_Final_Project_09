@@ -11,3 +11,5 @@ wheels/
 
 # 環境變數（含密碼，不要 commit）
 .env
+
+public_key/
