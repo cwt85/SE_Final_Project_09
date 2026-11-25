@@ -1,0 +1,57 @@
+{% extends "common/base.html" %}
+{% block title %}{{ '編輯課程' if course else '新增課程' }} - 管院空間系統{% endblock %}
+{% block content %}
+<h1>{{ '編輯課程' if course else '新增課程' }}</h1>
+
+{% if error %}<div class="alert alert-error">{{ error }}</div>{% endif %}
+
+<form method="post">
+  <p>課號<br>
+    <input name="course_code" value="{{ form.course_code or (course.course_code if course else '') or '' }}">
+  </p>
+  <p>課名<br>
+    <input name="name" required value="{{ form.name or (course.name if course else '') }}">
+  </p>
+
+  {% if is_admin %}
+  <p>授課老師<br>
+    <select name="teacher_id">
+      {% for t in teachers %}
+      <option value="{{ t.id }}" {% if course and course.teacher_id == t.id %}selected{% endif %}>{{ t.full_name }}</option>
+      {% endfor %}
+    </select>
+  </p>
+  {% endif %}
+
+  <p>教室{% if course %}（套用到所有堂）{% endif %}<br>
+    <select name="room_id" required>
+      {% for r in rooms %}
+      <option value="{{ r.id }}" {% if form.room_id|string == r.id|string %}selected{% endif %}>{{ r.room_code }}</option>
+      {% endfor %}
+    </select>
+  </p>
+
+  {% if not course %}
+  <p>第一次上課日期（之後每週同一天重複）<br>
+    <input type="date" name="start_date" required value="{{ form.start_date or '' }}">
+  </p>
+  <p>重複週數（含第一週）<br>
+    <input type="number" name="weeks" min="1" max="30" required value="{{ form.weeks or 1 }}">
+  </p>
+  {% endif %}
+
+  <p>開始時間{% if course %}（套用到所有堂）{% endif %}<br>
+    <input type="time" name="start_time" required
+           value="{{ form.start_time.strftime('%H:%M') if form.start_time and form.start_time is not string else (form.start_time or '') }}">
+  </p>
+  <p>結束時間{% if course %}（套用到所有堂）{% endif %}<br>
+    <input type="time" name="end_time" required
+           value="{{ form.end_time.strftime('%H:%M') if form.end_time and form.end_time is not string else (form.end_time or '') }}">
+  </p>
+
+  <p>
+    <button type="submit" class="button">儲存</button>
+    <a class="button" href="/schedule">取消</a>
+  </p>
+</form>
+{% endblock %}
