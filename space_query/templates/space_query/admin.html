@@ -1,9 +1,71 @@
 {% extends "common/base.html" %}
 {% block title %}教室資料管理 - 管院空間系統{% endblock %}
+
 {% block content %}
-<h1>教室資料管理</h1>
-<div class="todo">
-  <strong>TODO（模組①）</strong>：管理員新增、修改、刪除教室資料（rooms 資料表），
-  包含上傳照片／360° 全景照片、設定平面圖座標。
+<p><a href="/spaces">← 回空間列表</a></p>
+
+<div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; flex-wrap: wrap; gap: 10px;">
+  <h1 style="margin: 0;">教室資料管理</h1>
+  <a class="button" href="/spaces/admin/new">+ 新增空間</a>
+</div>
+
+{% if msg %}
+  <div class="alert alert-ok" style="margin-bottom: 16px;">{{ msg }}</div>
+{% endif %}
+
+{% if error %}
+  <div class="alert alert-error" style="margin-bottom: 16px;">{{ error }}</div>
+{% endif %}
+
+{% set TYPE_LABELS = {'classroom': '教室', 'computer_lab': '電腦教室', 'meeting': '會議室', 'other': '其他'} %}
+
+<div class="table-wrap">
+<table>
+  <thead>
+    <tr>
+      <th>編號</th>
+      <th>名稱</th>
+      <th>類型</th>
+      <th>樓層</th>
+      <th>容量</th>
+      <th>開放借用</th>
+      <th>平面圖座標 (X, Y)</th>
+      <th>操作</th>
+    </tr>
+  </thead>
+  <tbody>
+  {% for r in rooms %}
+    <tr>
+      <td><strong>{{ r.room_code }}</strong></td>
+      <td>{{ r.name }}</td>
+      <td>{{ TYPE_LABELS.get(r.room_type, r.room_type) }}</td>
+      <td>{{ r.floor ~ 'F' if r.floor is not none else '-' }}</td>
+      <td>{{ (r.capacity ~ ' 人') if r.capacity else '-' }}</td>
+      <td>
+        {% if r.is_bookable %}
+          <span style="color: var(--ok-text); font-weight: bold;">開放</span>
+        {% else %}
+          <span class="muted">不開放</span>
+        {% endif %}
+      </td>
+      <td>
+        {% if r.map_x is not none and r.map_y is not none %}
+          ({{ r.map_x }}%, {{ r.map_y }}%)
+        {% else %}
+          <span class="muted">未設定</span>
+        {% endif %}
+      </td>
+      <td style="white-space: nowrap;">
+        <a class="button" style="padding: 4px 10px; font-size: 0.85rem;" href="/spaces/admin/{{ r.id }}/edit">編輯</a>
+        <form class="inline" method="POST" action="/spaces/admin/{{ r.id }}/delete" onsubmit="return confirm('確定要刪除空間 {{ r.room_code }} 嗎？如果已有預約或排課，資料庫將禁止刪除。');">
+          <button type="submit" class="button" style="background: #a12828; padding: 4px 10px; font-size: 0.85rem;">刪除</button>
+        </form>
+      </td>
+    </tr>
+  {% else %}
+    <tr><td colspan="8" class="muted">目前沒有空間資料</td></tr>
+  {% endfor %}
+  </tbody>
+</table>
 </div>
 {% endblock %}

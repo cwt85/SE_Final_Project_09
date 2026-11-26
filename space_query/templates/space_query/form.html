@@ -1,0 +1,250 @@
+{% extends "common/base.html" %}
+{% block title %}{{ '編輯空間 ' ~ room.room_code if room else '新增空間' }} - 管院空間系統{% endblock %}
+
+{% block head %}
+<style>
+  .admin-form-container {
+    max-width: 760px;
+    margin: 20px auto;
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 24px 32px;
+  }
+  .form-row {
+    display: flex;
+    gap: 16px;
+    margin-bottom: 12px;
+  }
+  .form-row > * {
+    flex: 1;
+  }
+  .form-check {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin: 12px 0;
+  }
+  .form-check input {
+    width: auto;
+    margin: 0;
+  }
+  /* 平面圖點擊取座標 */
+  .picker-section {
+    margin-top: 16px;
+    padding: 16px;
+    background: var(--bg);
+    border: 1px dashed var(--border);
+    border-radius: 6px;
+  }
+  .floorplan-picker-wrapper {
+    position: relative;
+    display: inline-block;
+    max-width: 100%;
+    margin-top: 10px;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    overflow: hidden;
+    cursor: crosshair;
+    background: #fff;
+  }
+  .floorplan-picker-wrapper img {
+    display: block;
+    max-width: 100%;
+    height: auto;
+    user-select: none;
+    -webkit-user-drag: none;
+  }
+  .picker-pin {
+    position: absolute;
+    transform: translate(-50%, -50%);
+    width: 16px;
+    height: 16px;
+    background: #dc2626;
+    border: 3px solid #fff;
+    border-radius: 50%;
+    box-shadow: 0 0 0 3px rgba(220, 38, 38, 0.4);
+    pointer-events: none;
+    display: none;
+  }
+</style>
+{% endblock %}
+
+{% block content %}
+<p><a href="/spaces/admin">← 回教室資料管理</a></p>
+
+<div class="admin-form-container">
+  <h1>{{ '編輯空間：' ~ room.room_code if room else '新增空間' }}</h1>
+
+  {% if error %}
+    <div class="alert alert-error" style="margin-bottom: 16px;">{{ error }}</div>
+  {% endif %}
+
+  <form method="POST" action="{{ '/spaces/admin/' ~ room.id ~ '/edit' if room else '/spaces/admin/new' }}">
+    <div class="form-row">
+      <label>
+        空間編號 / 代號 *（例如：M101、M201）
+        <input type="text" name="room_code" required value="{{ room.room_code if room else (form.room_code if form else '') }}" placeholder="M101">
+      </label>
+      <label>
+        空間名稱 *（例如：示範教室 101）
+        <input type="text" name="name" required value="{{ room.name if room else (form.name if form else '') }}" placeholder="示範教室 101">
+      </label>
+    </div>
+
+    <div class="form-row">
+      <label>
+        空間類型
+        <select name="room_type">
+          {% set cur_type = room.room_type if room else (form.room_type if form else 'classroom') %}
+          <option value="classroom" {{ 'selected' if cur_type == 'classroom' else '' }}>教室</option>
+          <option value="computer_lab" {{ 'selected' if cur_type == 'computer_lab' else '' }}>電腦教室</option>
+          <option value="meeting" {{ 'selected' if cur_type == 'meeting' else '' }}>會議室</option>
+          <option value="other" {{ 'selected' if cur_type == 'other' else '' }}>其他</option>
+        </select>
+      </label>
+      <label>
+        容納人數（人）
+        <input type="number" name="capacity" min="0" value="{{ room.capacity if room and room.capacity is not none else (form.capacity if form and form.capacity is not none else '') }}" placeholder="40">
+      </label>
+    </div>
+
+    <label class="form-check">
+      {% set bookable = room.is_bookable if room else (form.is_bookable if form is defined else True) %}
+      <input type="checkbox" name="is_bookable" value="true" {{ 'checked' if bookable else '' }}>
+      <span>開放預約借用</span>
+    </label>
+
+    <label>
+      硬體設備（各設備以頓號或逗號隔開）
+      <input type="text" name="equipment" value="{{ room.equipment if room and room.equipment else (form.equipment if form else '') }}" placeholder="投影機、音響、白板">
+    </label>
+
+    <label>
+      空間詳細說明
+      <textarea name="description" rows="3" placeholder="例如：提供學術討論、碩博士研討課程使用...">{{ room.description if room and room.description else (form.description if form else '') }}</textarea>
+    </label>
+
+    <label>
+      360° 全景照片靜態路徑或網址
+      <input type="text" name="panorama_url" value="{{ room.panorama_url if room and room.panorama_url else (form.panorama_url if form else '') }}" placeholder="/static/space_query/panoramas/m101.jpg">
+      <small class="muted">可將全景相片放入 space_query/static/panoramas/ 後輸入路徑</small>
+    </label>
+
+    {# ---------- 平面圖與座標設定（含點擊設定功能） ---------- #}
+    <div class="picker-section">
+      <h3 style="margin-top: 0; margin-bottom: 8px;">樓層平面圖與座標</h3>
+      <p class="muted" style="margin: 0 0 12px 0; font-size: 0.9rem;">
+        請先選擇所屬樓層平面圖。選擇後，<strong>可直接在下方平面圖上點擊滑鼠</strong>，系統會自動標定紅點並填入座標百分比！
+      </p>
+
+      <label>
+        所屬樓層平面圖
+        <select name="floor_plan_id" id="floor_plan_select">
+          <option value="">-- 未指派樓層 --</option>
+          {% set cur_fp = room.floor_plan_id if room else (form.floor_plan_id if form else '') %}
+          {% for fp in floor_plans %}
+            <option value="{{ fp.id }}" data-url="{{ fp.image_url }}" {{ 'selected' if cur_fp == fp.id else '' }}>
+              {{ fp.building }} {{ fp.floor }}F ({{ fp.floor }} 樓)
+            </option>
+          {% endfor %}
+        </select>
+      </label>
+
+      <div class="form-row" style="margin-top: 10px;">
+        <label>
+          平面圖 X 座標 (%)
+          <input type="number" step="0.01" min="0" max="100" name="map_x" id="map_x" value="{{ room.map_x if room and room.map_x is not none else (form.map_x if form and form.map_x is not none else '') }}" placeholder="例：20.00">
+        </label>
+        <label>
+          平面圖 Y 座標 (%)
+          <input type="number" step="0.01" min="0" max="100" name="map_y" id="map_y" value="{{ room.map_y if room and room.map_y is not none else (form.map_y if form and form.map_y is not none else '') }}" placeholder="例：35.00">
+        </label>
+      </div>
+
+      {# 平面圖互動預覽與點擊定位容器 #}
+      <div id="picker_container" style="display: none; margin-top: 12px;">
+        <div class="floorplan-picker-wrapper" id="picker_wrapper" title="點擊此處設定紅點座標">
+          <img id="picker_img" src="" alt="樓層平面圖">
+          <div class="picker-pin" id="picker_pin"></div>
+        </div>
+      </div>
+    </div>
+
+    <div style="margin-top: 24px; display: flex; gap: 12px;">
+      <button type="submit" class="button">{{ '儲存修改' if room else '確認新增' }}</button>
+      <a class="button secondary" href="/spaces/admin">取消返回</a>
+    </div>
+  </form>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+  const fpSelect = document.getElementById('floor_plan_select');
+  const pickerContainer = document.getElementById('picker_container');
+  const pickerImg = document.getElementById('picker_img');
+  const pickerPin = document.getElementById('picker_pin');
+  const pickerWrapper = document.getElementById('picker_wrapper');
+  const inputX = document.getElementById('map_x');
+  const inputY = document.getElementById('map_y');
+
+  function updatePinFromInputs() {
+    const x = parseFloat(inputX.value);
+    const y = parseFloat(inputY.value);
+    if (!isNaN(x) && !isNaN(y) && x >= 0 && x <= 100 && y >= 0 && y <= 100) {
+      pickerPin.style.left = x + '%';
+      pickerPin.style.top = y + '%';
+      pickerPin.style.display = 'block';
+    } else {
+      pickerPin.style.display = 'none';
+    }
+  }
+
+  function updateFloorPlan() {
+    const selectedOption = fpSelect.options[fpSelect.selectedIndex];
+    const imgUrl = selectedOption ? selectedOption.getAttribute('data-url') : null;
+    if (imgUrl) {
+      pickerImg.src = imgUrl;
+      pickerContainer.style.display = 'block';
+      updatePinFromInputs();
+    } else {
+      pickerContainer.style.display = 'none';
+      pickerPin.style.display = 'none';
+    }
+  }
+
+  fpSelect.addEventListener('change', updateFloorPlan);
+
+  // 點擊平面圖直接計算百分比並填入輸入框
+  pickerWrapper.addEventListener('click', (e) => {
+    const rect = pickerImg.getBoundingClientRect();
+    if (rect.width === 0 || rect.height === 0) return;
+
+    let clickX = e.clientX - rect.left;
+    let clickY = e.clientY - rect.top;
+
+    let percentX = (clickX / rect.width) * 100;
+    let percentY = (clickY / rect.height) * 100;
+
+    percentX = Math.max(0, Math.min(100, percentX));
+    percentY = Math.max(0, Math.min(100, percentY));
+
+    inputX.value = percentX.toFixed(2);
+    inputY.value = percentY.toFixed(2);
+
+    updatePinFromInputs();
+  });
+
+  inputX.addEventListener('input', updatePinFromInputs);
+  inputY.addEventListener('input', updatePinFromInputs);
+
+  // 初始載入時更新平面圖與紅點
+  window.addEventListener('DOMContentLoaded', updateFloorPlan);
+  if (pickerImg.complete) {
+    updateFloorPlan();
+  } else {
+    pickerImg.onload = updatePinFromInputs;
+  }
+</script>
+{% endblock %}
