@@ -1,0 +1,36 @@
+{% extends "common/base.html" %}
+{% block title %}新增課程 - 管院空間系統{% endblock %}
+{% block content %}
+<h1>新增課程（選課）</h1>
+<p><a class="button" href="/schedule">我的選課</a></p>
+
+<form method="get" action="/schedule/enroll">
+  <input name="q" value="{{ q }}" placeholder="輸入課號、課名或老師姓名搜尋">
+  <button type="submit" class="button">搜尋</button>
+  {% if q %}<a class="button" href="/schedule/enroll">清除</a>{% endif %}
+</form>
+
+<form method="post" action="/schedule/enroll">
+<div class="table-wrap">
+<table>
+  <thead><tr><th>選取</th><th>課號</th><th>課名</th><th>授課老師</th><th>時段數</th><th>期間</th></tr></thead>
+  <tbody>
+  {% for c in courses %}
+    <tr>
+      <td>{% if c.enrolled %}<span class="badge">已選</span>
+          {% else %}<input type="checkbox" name="course_ids" value="{{ c.id }}" style="width:auto">{% endif %}</td>
+      <td>{{ c.course_code or '' }}</td>
+      <td>{{ c.name }}</td>
+      <td>{{ c.teacher_name }}</td>
+      <td>{{ c.session_count }}</td>
+      <td>{% if c.first_date %}{{ c.first_date }} ～ {{ c.last_date }}{% else %}-{% endif %}</td>
+    </tr>
+  {% else %}
+    <tr><td colspan="6" class="muted">找不到符合的課程</td></tr>
+  {% endfor %}
+  </tbody>
+</table>
+</div>
+<p><button type="submit" class="button">加入勾選的課程</button></p>
+</form>
+{% endblock %}
