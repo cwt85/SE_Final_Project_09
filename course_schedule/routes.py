@@ -8,7 +8,7 @@ from fastapi.responses import JSONResponse, RedirectResponse
 
 from common.auth import ROLE_ADMIN, ROLE_TEACHER, ROLE_USER, AdminUser, LoginUser, require_login
 from common.db import DB
-from common.occupancy import find_conflicts
+from common.occupancy import find_conflicts, get_week_occupancy
 from common.templating import render
 
 # dependencies=[...] 會套用到這個 router 底下的「所有」網址：沒登入一律導向登入頁
@@ -126,17 +126,19 @@ async def course_list(request: Request, user: LoginUser, db: DB, warn: int = 0):
 # ---------- 週曆 ----------
 
 @router.get("/calendar")
-async def calendar(request: Request, user: LoginUser):
-	"""週曆：只有管理員可以拖曳。"""
+async def calendar(request: Request, user: LoginUser, db: DB):
+	"""週曆：只有管理員可以拖曳；教室下拉選單用來疊加借用占用。"""
+	cur = await db.execute("SELECT id, room_code FROM rooms ORDER BY room_code")
 	return render(request, "course_schedule/calendar.html",
 	              is_admin=user["role"] == ROLE_ADMIN,
 	              is_teacher=user["role"] == ROLE_TEACHER,
-	              is_student=user["role"] == ROLE_STUDENT)
+	              is_student=user["role"] == ROLE_STUDENT,
+	              rooms=await cur.fetchall())
 
 
 @router.get("/events")
-async def events(user: LoginUser, db: DB):
-	"""週曆事件：學生只看自己選的課；老師自己的課標橘色。"""
+async def events(user: LoginUser, db: DB, room_id: int = 0, start: str = ""):
+	"""週曆事件：學生只看自己選的課；老師自己的課標橘色；選了教室就疊上該教室當週的借用。"""
 	await _ensure_enroll_table(db)
 	cur = await db.execute(
 		"""SELECT s.id, c.teacher_id, c.course_code, c.name, r.room_code, u.full_name,
@@ -145,9 +147,10 @@ async def events(user: LoginUser, db: DB):
 		   JOIN courses c ON c.id = s.course_id
 		   JOIN rooms r ON r.id = s.room_id
 		   JOIN users u ON u.id = c.teacher_id
-		   WHERE NOT %(is_student)s
-		      OR c.id IN (SELECT course_id FROM course_enrollments WHERE student_id = %(uid)s)""",
-		{"is_student": user["role"] == ROLE_STUDENT, "uid": user["id"]},
+		   WHERE (NOT %(is_student)s
+		      OR c.id IN (SELECT course_id FROM course_enrollments WHERE student_id = %(uid)s))
+		     AND (%(room_id)s = 0 OR s.room_id = %(room_id)s)""",
+		{"is_student": user["role"] == ROLE_STUDENT, "uid": user["id"], "room_id": room_id},
 	)
 	out = []
 	for r in await cur.fetchall():
@@ -164,6 +167,28 @@ async def events(user: LoginUser, db: DB):
 		if mine:
 			ev["backgroundColor"] = ev["borderColor"] = "#e67e22"
 		out.append(ev)
+
+	# 選了教室才疊上該教室當週的借用（課程已畫過，所以略過 source == "course"）
+	if room_id:
+		try:
+			any_day = datetime.fromisoformat(start).date() if start else date.today()
+		except ValueError:
+			any_day = date.today()
+		any_day = any_day + timedelta(days=3)   # 確保落在該週中間，避免週界線誤差
+		for o in await get_week_occupancy(db, room_id, any_day):
+			if o["source"] == "course":
+				continue
+			out.append({
+				"id": f"b{o['source_id']}",
+				"title": o["title"],
+				"start": f"{o['occupy_date']}T{o['start_time']}",
+				"end": f"{o['occupy_date']}T{o['end_time']}",
+				"editable": False,   # 借用不能拖曳
+				"backgroundColor": "#95a5a6", "borderColor": "#95a5a6",
+				"extendedProps": {"tip": f"借用：{o['title']}\n{o['start_time']:%H:%M}～{o['end_time']:%H:%M}",
+				                  "code": "借用", "name": o["title"], "room": "",
+				                  "teacher": "", "overlap": False},
+			})
 	return JSONResponse(out)
 
 

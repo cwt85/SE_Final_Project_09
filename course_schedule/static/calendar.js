@@ -1,6 +1,7 @@
 document.addEventListener("DOMContentLoaded", () => {
   const el = document.getElementById("calendar");
   const isAdmin = el.dataset.admin === "1";
+  const roomSelect = document.getElementById("roomSelect");
 
   const calendar = new FullCalendar.Calendar(el, {
     initialView: "timeGridWeek",
@@ -14,7 +15,14 @@ document.addEventListener("DOMContentLoaded", () => {
     height: "auto",
     editable: isAdmin,               // 只有管理員能拖曳
     eventDurationEditable: isAdmin,  // 只有管理員能拉伸時間
-    events: "/schedule/events",
+    // 依教室下拉選單取得事件；選了教室就會附上該教室當週的借用（灰色）
+    events: (info, success, failure) => {
+      const room = roomSelect ? roomSelect.value : "0";
+      fetch(`/schedule/events?room_id=${room}&start=${encodeURIComponent(info.startStr)}`)
+        .then((r) => r.json())
+        .then(success)
+        .catch(failure);
+    },
     eventDrop: handleChange,
     eventResize: handleChange,
     slotEventOverlap: false,         // 重疊的課程左右並排，不再互相蓋住
@@ -26,12 +34,15 @@ document.addEventListener("DOMContentLoaded", () => {
     eventClick: (info) => {          // 點擊顯示完整資訊
       alert(info.event.extendedProps.tip);
     },
-    eventContent: (arg) => {         // 事件內容：課名、教室、老師（置中）
+    eventContent: (arg) => {         // 事件內容（置中）
       const p = arg.event.extendedProps;
+      if (p.code === "借用") {       // 借用占用：只顯示借用標題
+        return { html: `<div class="ev-box"><b>借用</b>${p.name}</div>` };
+      }
       const title = p.overlap ? `${p.code}<br>${p.name}` : `${p.code} ${p.name}`;
       return { html: `<div class="ev-box"><b>${title}</b>${p.room}<br>${p.teacher}</div>` };
     },
-    eventsSet: (events) => {         // 標記哪些課程時間重疊
+    eventsSet: (events) => {         // 標記哪些事件時間重疊
       events.forEach((a) => {
         const overlap = events.some((b) => b !== a && a.start < b.end && b.start < a.end);
         if (a.extendedProps.overlap !== overlap) {
@@ -41,6 +52,11 @@ document.addEventListener("DOMContentLoaded", () => {
     },
   });
   calendar.render();                 // 一定要有，否則不會畫出週曆
+
+  // 切換教室時重新載入事件
+  if (roomSelect) {
+    roomSelect.addEventListener("change", () => calendar.refetchEvents());
+  }
 
   // 管理員拖曳或拉伸後，把新時間存到後端
   async function handleChange(info) {
