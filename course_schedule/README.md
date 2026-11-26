@@ -18,7 +18,7 @@
       雲端資料庫帳號若無建表權限，需請cwt在common資料夾的資料庫中額外手動建立)
 - [x] 管理員可以列出所有老師課程中**時間衝突**的課程清單
 - [x] 管理員可以透過滑鼠 **drag & drop** 修改課程的日期時間
-- [ ] **整合**：週曆上同時顯示該教室的借用占用（`common.occupancy.get_week_occupancy`）
+- [x] **整合**：週曆上同時顯示該教室的借用占用（`common.occupancy.get_week_occupancy`）
 
 ## 檔案說明
 
