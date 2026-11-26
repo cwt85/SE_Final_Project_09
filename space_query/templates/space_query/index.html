@@ -1,27 +1,187 @@
 {% extends "common/base.html" %}
 {% block title %}空間查詢 - 管院空間系統{% endblock %}
+
+{% block head %}
+<style>
+  .floorplan-section {
+    margin-bottom: 32px;
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 20px;
+  }
+  .floorplan-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 12px;
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+  .floorplan-header h2 {
+    margin: 0;
+    font-size: 1.25rem;
+    color: var(--primary);
+  }
+  .floor-tabs {
+    display: flex;
+    gap: 8px;
+    margin-bottom: 16px;
+    border-bottom: 2px solid var(--border);
+    padding-bottom: 8px;
+  }
+  .floor-tab-btn {
+    padding: 6px 16px;
+    font-size: 0.95rem;
+    font-weight: bold;
+    border: 1px solid var(--border);
+    background: #fff;
+    color: var(--muted);
+    border-radius: 4px;
+    cursor: pointer;
+    transition: all 0.2s;
+  }
+  .floor-tab-btn:hover {
+    background: #f0f3f6;
+    color: var(--primary);
+  }
+  .floor-tab-btn.active {
+    background: var(--primary);
+    color: #fff;
+    border-color: var(--primary);
+  }
+  .floor-pane {
+    display: none;
+  }
+  .floor-pane.active {
+    display: block;
+  }
+  .floorplan-wrapper {
+    position: relative;
+    display: inline-block;
+    max-width: 100%;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    overflow: hidden;
+    background: #fff;
+  }
+  .floorplan-img {
+    display: block;
+    max-width: 100%;
+    height: auto;
+  }
+  .map-pin-link {
+    position: absolute;
+    transform: translate(-50%, -50%);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 10;
+    text-decoration: none;
+    cursor: pointer;
+    transition: transform 0.2s;
+  }
+  .map-pin-link:hover {
+    transform: translate(-50%, -50%) scale(1.15);
+    z-index: 20;
+  }
+  .pin-point {
+    width: 16px;
+    height: 16px;
+    background: #dc2626;
+    border: 3px solid #fff;
+    border-radius: 50%;
+    box-shadow: 0 0 0 4px rgba(220, 38, 38, 0.4);
+    animation: pin-pulse 2s infinite;
+  }
+  .pin-label {
+    position: absolute;
+    bottom: calc(100% + 6px);
+    background: var(--primary);
+    color: #fff;
+    padding: 2px 8px;
+    border-radius: 4px;
+    font-size: 0.75rem;
+    font-weight: bold;
+    white-space: nowrap;
+    box-shadow: 0 2px 5px rgba(0,0,0,0.3);
+  }
+  .map-pin-link:hover .pin-label {
+    background: var(--primary-dark);
+  }
+  @keyframes pin-pulse {
+    0% { box-shadow: 0 0 0 0 rgba(220, 38, 38, 0.7); }
+    70% { box-shadow: 0 0 0 10px rgba(220, 38, 38, 0); }
+    100% { box-shadow: 0 0 0 0 rgba(220, 38, 38, 0); }
+  }
+</style>
+{% endblock %}
+
 {% block content %}
-<h1>空間查詢</h1>
-
-{% if user and user.role == 'admin' %}
-  <p><a class="button" href="/spaces/admin">管理教室資料</a></p>
-{% endif %}
-
-<div class="todo">
-  <strong>TODO（模組①）</strong>：管院平面圖，在圖上標示教室位置（使用 rooms.map_x / map_y 百分比座標）
+<div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
+  <h1 style="margin: 0;">空間查詢</h1>
+  {% if user and user.role == 'admin' %}
+    <a class="button" href="/spaces/admin">管理教室資料</a>
+  {% endif %}
 </div>
 
+{# ---------- 平面圖瀏覽區塊 ---------- #}
+{% if floor_plans %}
+<section class="floorplan-section">
+  <div class="floorplan-header">
+    <h2>管院樓層平面圖</h2>
+    <span class="muted" style="font-size: 0.9rem;">點擊地圖上的紅點可直接前往該教室詳細頁</span>
+  </div>
+
+  {# 樓層切換按鈕 #}
+  <div class="floor-tabs">
+    {% for fp in floor_plans %}
+      <button type="button" class="floor-tab-btn {{ 'active' if loop.first else '' }}" data-target="floor-pane-{{ fp.id }}">
+        {{ fp.floor }}F
+      </button>
+    {% endfor %}
+  </div>
+
+  {# 各樓層平面圖容器 #}
+  {% for fp in floor_plans %}
+    <div id="floor-pane-{{ fp.id }}" class="floor-pane {{ 'active' if loop.first else '' }}">
+      <div class="floorplan-wrapper">
+        <img src="{{ fp.image_url }}" alt="{{ fp.building }} {{ fp.floor }}F 平面圖" class="floorplan-img">
+        {# 在該樓層平面圖上標記該樓層的所有教室 #}
+        {% for r in rooms if r.floor_plan_id == fp.id and r.map_x is not none and r.map_y is not none %}
+          <a href="/spaces/{{ r.id }}" class="map-pin-link" style="left: {{ r.map_x }}%; top: {{ r.map_y }}%;" title="{{ r.room_code }} {{ r.name }}（點擊查看）">
+            <div class="pin-label">{{ r.room_code }}</div>
+            <div class="pin-point"></div>
+          </a>
+        {% endfor %}
+      </div>
+    </div>
+  {% endfor %}
+</section>
+{% endif %}
+
+{# ---------- 教室列表表格 ---------- #}
+<h2>所有空間列表</h2>
 {% set TYPE_LABELS = {'classroom': '教室', 'computer_lab': '電腦教室', 'meeting': '會議室', 'other': '其他'} %}
 
 <div class="table-wrap">
 <table>
-  <thead><tr><th>編號</th><th>名稱</th><th>類型</th><th>樓層</th><th>容量</th><th>開放借用</th></tr></thead>
+  <thead>
+    <tr>
+      <th>編號</th>
+      <th>名稱</th>
+      <th>類型</th>
+      <th>樓層</th>
+      <th>容量</th>
+      <th>開放借用</th>
+    </tr>
+  </thead>
   <tbody>
   {% for r in rooms %}
     <tr>
       <td><a href="/spaces/{{ r.id }}">{{ r.room_code }}</a></td>
       <td>{{ r.name }}</td>
-      <td>{{ TYPE_LABELS[r.room_type] }}</td>
+      <td>{{ TYPE_LABELS.get(r.room_type, r.room_type) }}</td>
       <td>{{ r.floor ~ 'F' if r.floor is not none else '-' }}</td>
       <td>{{ r.capacity or '-' }}</td>
       <td>{{ '是' if r.is_bookable else '否' }}</td>
@@ -32,4 +192,26 @@
   </tbody>
 </table>
 </div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+  // 樓層切換按鈕點擊互動
+  document.querySelectorAll('.floor-tab-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      // 移除所有按鈕的 active
+      document.querySelectorAll('.floor-tab-btn').forEach(b => b.classList.remove('active'));
+      // 隱藏所有樓層 pane
+      document.querySelectorAll('.floor-pane').forEach(p => p.classList.remove('active'));
+
+      // 啟用當前點擊的按鈕與對應 pane
+      btn.classList.add('active');
+      const targetId = btn.getAttribute('data-target');
+      const targetPane = document.getElementById(targetId);
+      if (targetPane) {
+        targetPane.classList.add('active');
+      }
+    });
+  });
+</script>
 {% endblock %}

@@ -15,12 +15,27 @@ async def room_list(request: Request, db: DB):
 	"""空間列表（公開）。"""
 	cur = await db.execute(
 		"""SELECT r.id, r.room_code, r.name, r.room_type, r.capacity, r.is_bookable,
+		          r.map_x, r.map_y, r.floor_plan_id,
 		          f.floor
 		   FROM rooms r
 		   LEFT JOIN floor_plans f ON f.id = r.floor_plan_id   -- 還沒放上平面圖的教室也要列出
 		   ORDER BY r.room_code"""
 	)
-	return render(request, "space_query/index.html", rooms=await cur.fetchall())
+	rooms = await cur.fetchall()
+
+	fp_cur = await db.execute(
+		"""SELECT id, building, floor, image_url
+		   FROM floor_plans
+		   ORDER BY floor"""
+	)
+	floor_plans = await fp_cur.fetchall()
+
+	return render(
+		request,
+		"space_query/index.html",
+		rooms=rooms,
+		floor_plans=floor_plans,
+	)
 
 
 # ⚠ /admin 必須寫在 /{room_id} 前面：FastAPI 由上往下比對網址，

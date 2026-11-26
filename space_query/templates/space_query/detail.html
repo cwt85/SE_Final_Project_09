@@ -25,6 +25,55 @@
     border-radius: 6px;
     background: #111;
   }
+  /* 平面圖與教室標記 */
+  .floorplan-wrapper {
+    position: relative;
+    display: inline-block;
+    max-width: 100%;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    overflow: hidden;
+    background: #fff;
+  }
+  .floorplan-img {
+    display: block;
+    max-width: 100%;
+    height: auto;
+  }
+  .map-pin {
+    position: absolute;
+    transform: translate(-50%, -50%);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 10;
+  }
+  .pin-point {
+    width: 16px;
+    height: 16px;
+    background: #dc2626;
+    border: 3px solid #fff;
+    border-radius: 50%;
+    box-shadow: 0 0 0 4px rgba(220, 38, 38, 0.4);
+    animation: pin-pulse 2s infinite;
+  }
+  .pin-label {
+    position: absolute;
+    bottom: calc(100% + 6px);
+    background: var(--primary);
+    color: #fff;
+    padding: 2px 8px;
+    border-radius: 4px;
+    font-size: 0.75rem;
+    font-weight: bold;
+    white-space: nowrap;
+    box-shadow: 0 2px 5px rgba(0,0,0,0.3);
+  }
+  @keyframes pin-pulse {
+    0% { box-shadow: 0 0 0 0 rgba(220, 38, 38, 0.7); }
+    70% { box-shadow: 0 0 0 10px rgba(220, 38, 38, 0); }
+    100% { box-shadow: 0 0 0 0 rgba(220, 38, 38, 0); }
+  }
 </style>
 {% endblock %}
 
@@ -54,12 +103,23 @@
   {% endif %}
 </section>
 
-<div class="todo" style="margin-top: 24px;">
-  <strong>TODO（模組① 待完成項目）</strong>
-  <ul>
-    <li>平面圖：在 room.floor_plan_url 上標出 (map_x, map_y) = ({{ room.map_x }}, {{ room.map_y }})%</li>
-  </ul>
-</div>
+{# 教室位置（平面圖） #}
+<section class="detail-section">
+  <h2>教室位置（{{ room.floor ~ 'F' if room.floor is not none else '未指派樓層' }} 平面圖）</h2>
+  {% if room.floor_plan_url %}
+    <div class="floorplan-wrapper">
+      <img src="{{ room.floor_plan_url }}" alt="{{ room.floor }}F 平面圖" class="floorplan-img">
+      {% if room.map_x is not none and room.map_y is not none %}
+        <div class="map-pin" style="left: {{ room.map_x }}%; top: {{ room.map_y }}%;">
+          <div class="pin-label">{{ room.room_code }}</div>
+          <div class="pin-point"></div>
+        </div>
+      {% endif %}
+    </div>
+  {% else %}
+    <p class="muted">目前尚未設定此教室的樓層平面圖。</p>
+  {% endif %}
+</section>
 {% endblock %}
 
 {% block scripts %}
