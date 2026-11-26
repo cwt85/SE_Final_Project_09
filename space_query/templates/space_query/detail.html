@@ -1,5 +1,33 @@
 {% extends "common/base.html" %}
 {% block title %}{{ room.room_code }} - 管院空間系統{% endblock %}
+
+{% block head %}
+{# 載入 360° 全景套件 Pannellum #}
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/pannellum@2.5.6/build/pannellum.css"/>
+<script type="text/javascript" src="https://cdn.jsdelivr.net/npm/pannellum@2.5.6/build/pannellum.js"></script>
+<style>
+  .detail-section {
+    margin-top: 24px;
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 16px 20px;
+  }
+  .detail-section h2 {
+    margin-top: 0;
+    margin-bottom: 12px;
+    font-size: 1.2rem;
+    color: var(--primary);
+  }
+  #panorama-viewer {
+    width: 100%;
+    height: 420px;
+    border-radius: 6px;
+    background: #111;
+  }
+</style>
+{% endblock %}
+
 {% block content %}
 <p><a href="/spaces">← 回空間列表</a></p>
 <h1>{{ room.room_code }} {{ room.name }}</h1>
@@ -16,11 +44,35 @@
   <p><a class="button" href="/booking/new?room_id={{ room.id }}">預約這個空間</a></p>
 {% endif %}
 
-<div class="todo">
-  <strong>TODO（模組①）</strong>
+{# 360° 全景照片區塊 #}
+<section class="detail-section">
+  <h2>360° 全景照片</h2>
+  {% if room.panorama_url %}
+    <div id="panorama-viewer"></div>
+  {% else %}
+    <p class="muted">目前此空間尚未提供 360° 全景照片。</p>
+  {% endif %}
+</section>
+
+<div class="todo" style="margin-top: 24px;">
+  <strong>TODO（模組① 待完成項目）</strong>
   <ul>
-    <li>360° 全景照片：用 Pannellum 顯示 room.panorama_url（目前：{{ room.panorama_url or '未設定' }}）</li>
     <li>平面圖：在 room.floor_plan_url 上標出 (map_x, map_y) = ({{ room.map_x }}, {{ room.map_y }})%</li>
   </ul>
 </div>
 {% endblock %}
+
+{% block scripts %}
+{% if room.panorama_url %}
+<script>
+  pannellum.viewer('panorama-viewer', {
+    type: 'equirectangular',
+    panorama: '{{ room.panorama_url }}',
+    autoLoad: true,
+    showZoomCtrl: true,
+    showFullscreenCtrl: true
+  });
+</script>
+{% endif %}
+{% endblock %}
+
