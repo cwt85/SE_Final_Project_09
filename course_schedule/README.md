@@ -33,7 +33,7 @@
 | 網址 | 說明 | 權限 | 狀態 |
 |---|---|---|---|
 | `GET /schedule` | 課程清單（老師：自己的；管理員：全部） | 登入 | ✅ |
-| `GET /schedule/calendar` | 排課週曆 | 登入 | TODO |
+| `GET /schedule/calendar` | 排課週曆 | 登入 | ✅|
 | `GET /schedule/conflicts` | 衝突清單 | 管理員 | ✅ |
 
 ## 使用的資料表
