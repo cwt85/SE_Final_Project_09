@@ -2,8 +2,27 @@
 {% block title %}衝突清單 - 管院空間系統{% endblock %}
 {% block content %}
 <h1>時間衝突的課程清單</h1>
-<div class="todo">
-  <strong>TODO（模組③）</strong>：列出所有老師課程中時間衝突的課程（教室衝突、老師衝堂）。
-  查詢 SQL 可參考 <code>docs/database.md</code> 第 5.3 節。
+
+{% if conflicts %}
+<div class="table-wrap">
+  <table>
+    <thead>
+      <tr><th>類型</th><th>日期</th><th>教室</th><th>課程 A</th><th>課程 B</th></tr>
+    </thead>
+    <tbody>
+    {% for c in conflicts %}
+      <tr>
+        <td><span class="badge">{{ c.conflict_type }}</span></td>
+        <td>{{ c.session_date }}</td>
+        <td>{{ c.room_code }}</td>
+        <td>{{ c.course_a }}</td>
+        <td>{{ c.course_b }}</td>
+      </tr>
+    {% endfor %}
+    </tbody>
+  </table>
 </div>
+{% else %}
+<p class="muted">目前沒有時間衝突的課程。</p>
+{% endif %}
 {% endblock %}

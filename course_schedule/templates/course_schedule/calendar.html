@@ -1,12 +1,23 @@
 {% extends "common/base.html" %}
 {% block title %}排課週曆 - 管院空間系統{% endblock %}
+{% block head %}
+<script src="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.15/index.global.min.js"></script>
+<style>
+  #calendar { max-width: 1100px; margin: 0 auto; font-size: 12px; }
+  .fc-event-main { padding: 1px 2px; overflow: hidden; height: 100%;
+                   display: flex; align-items: center; justify-content: center; }
+  .ev-box { width: 100%; text-align: center; line-height: 1.25; font-size: 11px;
+            word-break: break-all; white-space: normal; }
+  .ev-box b { display: block; }
+</style>
+{% endblock %}
 {% block content %}
 <h1>排課週曆</h1>
-<div class="todo">
-  <strong>TODO（模組③）</strong>
-  <ul>
-    <li>以週曆形式檢視所有目前排課的狀態</li>
-    <li>管理員可以用滑鼠 drag &amp; drop 修改課程的日期時間</li>
-  </ul>
-</div>
+<p>
+  <a class="button" href="/schedule">返回課程清單</a>
+  {% if is_admin %}<span class="muted">管理員可用滑鼠拖曳或拉伸時段來修改日期時間</span>{% endif %}
+</p>
+{% if is_student %}<p class="muted">這裡只顯示你選的課程。<a href="/schedule/enroll">去新增課程</a></p>{% endif %}
+<div id="calendar" data-admin="{{ 1 if is_admin else 0 }}"></div>
 {% endblock %}
+{% block scripts %}<script src="/static/course_schedule/calendar.js"></script>{% endblock %}
